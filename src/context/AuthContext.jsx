@@ -6,10 +6,32 @@ import { setUser as setSentryUser } from '../lib/sentry.js'
 
 const AuthContext = createContext({})
 
+// After this long, stop blocking the UI on the initial auth load. A paused or
+// unreachable Supabase backend makes the token refresh hang/retry, which would
+// otherwise keep the whole app stuck on the loading screen indefinitely.
+const INITIAL_AUTH_TIMEOUT_MS = 8000
+
+const isLikelyNetworkError = error => {
+  if (!error) return false
+  if (error.name === 'AuthRetryableFetchError') return true
+  const msg = String(error.message || error).toLowerCase()
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network error') ||
+    msg.includes('err_name_not_resolved') ||
+    msg.includes('name_not_resolved') ||
+    msg.includes('load failed') ||
+    msg.includes('timed out') ||
+    msg.includes('timeout')
+  )
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [backendUnavailable, setBackendUnavailable] = useState(false)
 
   const normalizeSignedInUserInBackground = signedInUser => {
     if (!signedInUser?.id) return
@@ -53,11 +75,18 @@ export function AuthProvider({ children }) {
       ? await supabase.auth.refreshSession()
       : await supabase.auth.getSession()
 
+    if (result?.error && isLikelyNetworkError(result.error)) {
+      setBackendUnavailable(true)
+      return session
+    }
+
     const nextSession = result?.data?.session ?? null
     const nextUser = nextSession?.user ?? null
 
     setSession(nextSession)
     setUser(nextUser)
+    // We successfully reached the backend, so clear any "unavailable" state.
+    setBackendUnavailable(false)
 
     if (nextUser) normalizeSignedInUserInBackground(nextUser)
 
@@ -66,6 +95,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+    let settled = false
+
+    // Don't let a hung/paused backend keep the app stuck on the loading screen.
+    // If the initial session load hasn't settled in time, stop blocking the UI
+    // and surface a "backend unavailable" banner instead.
+    const loadTimeout = window.setTimeout(() => {
+      if (mounted && !settled) {
+        setBackendUnavailable(true)
+        setLoading(false)
+      }
+    }, INITIAL_AUTH_TIMEOUT_MS)
 
     syncSession(false)
       .catch(error => {
@@ -73,9 +113,12 @@ export function AuthProvider({ children }) {
         if (mounted) {
           setSession(null)
           setUser(null)
+          if (isLikelyNetworkError(error)) setBackendUnavailable(true)
         }
       })
       .finally(() => {
+        settled = true
+        window.clearTimeout(loadTimeout)
         if (mounted) setLoading(false)
       })
 
@@ -95,12 +138,18 @@ export function AuthProvider({ children }) {
           expiresAt &&
           expiresAt - Date.now() < 5 * 60 * 1000
 
-        if (shouldRefresh) syncSession(true).catch(() => {})
+        if (shouldRefresh) syncSession(true).catch(error => {
+          if (mounted && isLikelyNetworkError(error)) setBackendUnavailable(true)
+        })
+      }).catch(error => {
+        if (mounted && isLikelyNetworkError(error)) setBackendUnavailable(true)
       })
     }, 60 * 1000)
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') syncSession(false).catch(() => {})
+      if (document.visibilityState === 'visible') syncSession(false).catch(error => {
+        if (mounted && isLikelyNetworkError(error)) setBackendUnavailable(true)
+      })
     }
 
     document.addEventListener('visibilitychange', handleVisibility)
@@ -178,6 +227,8 @@ export function AuthProvider({ children }) {
       user,
       session,
       loading,
+      backendUnavailable,
+      retryConnection: () => syncSession(false),
       refreshSession: () => syncSession(true),
       signUp,
       signIn,
