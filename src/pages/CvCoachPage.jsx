@@ -50,7 +50,7 @@ function QuickWinCard({ win, index, t }) {
       {example && (
         <div style={{ background: 'var(--bg-input)', borderLeft: `3px solid ${theme.copper}`, borderRadius: 10, padding: '9px 11px', marginLeft: 38 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 9, fontWeight: 900, color: theme.muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Example</span>
+            <span style={{ fontSize: 9, fontWeight: 900, color: theme.muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t('example', 'Example')}</span>
             <button onClick={() => { navigator.clipboard.writeText(example); setCopiedExample(true); setTimeout(() => setCopiedExample(false), 1500) }}
               style={{ background: copiedExample ? 'rgba(85,124,100,0.15)' : theme.paper, border: `1px solid ${copiedExample ? 'rgba(85,124,100,0.3)' : theme.line}`, borderRadius: 14, padding: '2px 8px', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: copiedExample ? theme.green : theme.muted, fontFamily: 'inherit' }}>
               {copiedExample ? `✓ ${t('copied')}` : `📋 ${t('copy')}`}
@@ -91,7 +91,7 @@ function AnalysisCoach({ analysis, t }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <Kicker>{t('coach_kicker')}</Kicker>
           <p style={{ fontSize: 17, fontWeight: 500, color: theme.navy, fontFamily: 'Georgia, Newsreader, serif', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.04em' }}>
-            {r.job_context?.title || analysis.job_title || 'Analysis'}
+            {r.job_context?.title || analysis.job_title || t('coach_analysis_fallback', 'Analysis')}
           </p>
           {r.job_context?.company && r.job_context.company !== 'Not specified' &&
             <p style={{ fontSize: 12, color: theme.copper, fontWeight: 800, margin: '2px 0 0' }}>@ {r.job_context.company}</p>}
@@ -183,7 +183,7 @@ function CoverLetterPanel({ selected, t, lang, fullName, saveFullName }) {
       if (!nameToUse && tempName?.trim()) {
         const r = await saveFullName(tempName.trim())
         if (r?.success) { nameToUse = tempName.trim(); setEditingName(false) }
-        else { setGenError(r?.error || 'Could not save your name.'); setGenLoading(false); return }
+        else { setGenError(r?.error || t('coach_err_save_name', 'Could not save your name.')); setGenLoading(false); return }
       }
       if (!nameToUse) { setEditingName(true); setGenError(t('name_required_first')); setGenLoading(false); return }
 
@@ -193,13 +193,13 @@ function CoverLetterPanel({ selected, t, lang, fullName, saveFullName }) {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ analysis: selected.result, lang, tone, length, recipient: recipient.trim() || null, fullName: nameToUse })
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Error ${res.status}`) }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `${t('coach_err_prefix', 'Error ')}${res.status}`) }
       const data = await res.json()
       setCoverLetter(data.letter || '')
       if (data.letter) autoSaveLetter(data.letter)
     } catch (e) {
       setCoverLetter('')
-      setGenError(e.message || 'Could not generate cover letter.')
+      setGenError(e.message || t('coach_err_generate', 'Could not generate cover letter.'))
     }
     setGenLoading(false)
   }
@@ -226,7 +226,7 @@ function CoverLetterPanel({ selected, t, lang, fullName, saveFullName }) {
             {savedLetters.length > 0 && (
               <div style={{ borderRadius: 16, border: `1px solid ${theme.line}`, overflow: 'hidden' }}>
                 <div style={{ padding: '10px 14px', background: 'var(--bg-input)', borderBottom: `1px solid ${theme.line}` }}>
-                  <Kicker>Previous letters</Kicker>
+                  <Kicker>{t('coach_previous_letters', 'Previous letters')}</Kicker>
                 </div>
                 <div style={{ display: 'grid', gap: 0 }}>
                   {savedLetters.slice(0, 4).map((l, i) => (
@@ -240,7 +240,7 @@ function CoverLetterPanel({ selected, t, lang, fullName, saveFullName }) {
                       </button>
                       <button onClick={() => deleteSavedLetter(l.id)}
                         style={{ background: 'none', border: 'none', color: theme.muted, cursor: 'pointer', fontSize: 14, padding: '2px 4px', lineHeight: 1 }}
-                        title="Remove">×</button>
+                        title={t('coach_remove', 'Remove')}>×</button>
                     </div>
                   ))}
                 </div>
@@ -383,13 +383,13 @@ export default function CvCoachPage({ setPage }) {
       <div style={{ ...card({ padding: 34 }) }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🎯</div>
         <h2 style={{ fontFamily: 'Georgia, Newsreader, serif', fontSize: 34, color: theme.navy, marginBottom: 8, fontWeight: 500, letterSpacing: '-0.06em' }}>{t('no_analyses', 'No analyses yet')}</h2>
-        <p style={{ fontSize: 14, color: theme.muted, marginBottom: 24, lineHeight: 1.6 }}>CV Coach generates cover letters and messages based on a job analysis. Run a job analysis first, then come back here to generate your assets.</p>
+        <p style={{ fontSize: 14, color: theme.muted, marginBottom: 24, lineHeight: 1.6 }}>{t('coach_empty_desc', 'CV Coach generates cover letters and messages based on a job analysis. Run a job analysis first, then come back here to generate your assets.')}</p>
         <button
           type="button"
           onClick={() => setPage?.('analyzer')}
           style={{ minHeight: 44, padding: '0 24px', borderRadius: 999, border: 0, background: theme.navy, color: theme.ivory, fontWeight: 900, cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}
         >
-          Analyze a job first →
+          {t('coach_analyze_first', 'Analyze a job first →')}
         </button>
       </div>
     </div>
@@ -448,7 +448,7 @@ export default function CvCoachPage({ setPage }) {
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   style={{ flex: 1, padding: '9px 6px', borderRadius: 12, border: `1.5px solid ${activeTab === tab.id ? theme.navy : 'transparent'}`, background: activeTab === tab.id ? theme.navy : 'transparent', color: activeTab === tab.id ? theme.ivory : theme.muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.13s', letterSpacing: '0.01em' }}>
                   <span style={{ fontSize: 13 }}>{tab.icon}</span>
-                  <span>{tab.label}</span>
+                  <span>{t(`coach_tab_${tab.id}`, tab.label)}</span>
                 </button>
               ))}
             </div>
