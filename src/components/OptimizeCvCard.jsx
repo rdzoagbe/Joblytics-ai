@@ -3,7 +3,7 @@ import { useLang } from '../context/LangContext'
 import { useCvPersist } from '../hooks/useCvPersist'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { generateOptimizedCvDocx } from '../utils/cvDocx'
+import { generateOptimizedCvDocx, generateOptimizedCvPdf } from '../utils/cvDocx'
 import CommunicationAssetsCard from './CommunicationAssetsCard'
 
 function OptimizeCvPanel({ selected }) {
@@ -56,17 +56,19 @@ function OptimizeCvPanel({ selected }) {
     setLoading(false)
   }
 
-  const download = async () => {
+  const download = async (format = 'docx') => {
     if (!optimized) return
-    setDownloading(true)
+    setError('')
+    setDownloading(format)
     try {
       const jobTitle = selected?.result?.job_context?.title?.replace(/[^a-zA-Z0-9]+/g, '-').slice(0, 30) || 'optimized'
-      const fileName = `CV-${optimized.header?.full_name?.replace(/\s+/g, '-') || 'me'}-${jobTitle}.docx`
-      await generateOptimizedCvDocx(optimized, { fileName })
+      const base = `CV-${optimized.header?.full_name?.replace(/\s+/g, '-') || 'me'}-${jobTitle}`
+      if (format === 'pdf') await generateOptimizedCvPdf(optimized, { fileName: `${base}.pdf` })
+      else await generateOptimizedCvDocx(optimized, { fileName: `${base}.docx` })
     } catch (e) {
       setError(e.message || 'Could not generate file. Please try again.')
     }
-    setDownloading(false)
+    setDownloading('')
   }
 
   return (
@@ -135,13 +137,16 @@ function OptimizeCvPanel({ selected }) {
             {error && <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>⚠ {error}</p>}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <button onClick={download} disabled={downloading} className="btn-primary" style={{ width: '100%' }}>
-                {downloading ? '⏳ ...' : `⬇ ${t('download_docx') || 'Download .docx'}`}
+              <button onClick={() => download('pdf')} disabled={!!downloading} className="btn-primary" style={{ width: '100%' }}>
+                {downloading === 'pdf' ? '⏳ ...' : `⬇ ${t('download_pdf') || 'Download PDF'}`}
               </button>
-              <button onClick={optimize} disabled={loading} style={{ padding: '10px', borderRadius: 12, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                ↺ {t('regenerate') || 'Regenerate'}
+              <button onClick={() => download('docx')} disabled={!!downloading} style={{ width: '100%', padding: '10px', borderRadius: 12, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                {downloading === 'docx' ? '⏳ ...' : `⬇ ${t('download_docx') || 'Download .docx'}`}
               </button>
             </div>
+            <button onClick={optimize} disabled={loading} style={{ width: '100%', marginTop: 8, padding: '10px', borderRadius: 12, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+              ↺ {t('regenerate') || 'Regenerate'}
+            </button>
           </div>
         )}
       </div>
