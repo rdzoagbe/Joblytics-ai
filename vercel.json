@@ -5,6 +5,18 @@
     },
     "api/smart-job-sync.js": {
       "maxDuration": 60
+    },
+    "api/cover-letter.js": {
+      "maxDuration": 60
+    },
+    "api/career-intelligence.js": {
+      "maxDuration": 60
+    },
+    "api/profile-optimize.js": {
+      "maxDuration": 60
+    },
+    "api/linkedin-optimize.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

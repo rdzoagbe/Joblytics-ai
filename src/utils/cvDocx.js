@@ -160,3 +160,116 @@ export async function generateOptimizedCvDocx(optimized, opts = {}) {
   const blob = await Packer.toBlob(doc)
   saveAs(blob, fileName)
 }
+
+// ATS-friendly single-column PDF of the full optimized resume (same structure as the DOCX).
+// Text-based (no images/tables/columns) so applicant tracking systems can parse it.
+export async function generateOptimizedCvPdf(optimized, opts = {}) {
+  const { jsPDF } = await import('jspdf')
+  const o = optimized || {}
+  const h = o.header || {}
+  const contact = h.contact || {}
+  const { fileName = 'CV-optimized.pdf' } = opts
+
+  const ACCENT_RGB = [224, 120, 86]
+  const PRIMARY_RGB = [26, 27, 34]
+  const MUTED_RGB = [92, 96, 102]
+  const clean = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim()
+
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
+  const pageW = pdf.internal.pageSize.getWidth()
+  const pageH = pdf.internal.pageSize.getHeight()
+  const margin = 48
+  const width = pageW - margin * 2
+  let y = 56
+
+  const ensureSpace = need => { if (y + need > pageH - 48) { pdf.addPage(); y = 56 } }
+
+  const text = (str, { size = 10, color = PRIMARY_RGB, bold = false, italic = false, gap = 14, align = 'left', indent = 0 } = {}) => {
+    const value = clean(str)
+    if (!value) return
+    let style = 'normal'
+    if (bold && italic) style = 'bolditalic'
+    else if (bold) style = 'bold'
+    else if (italic) style = 'italic'
+    pdf.setFont('helvetica', style)
+    pdf.setFontSize(size)
+    pdf.setTextColor(color[0], color[1], color[2])
+    const maxW = width - indent
+    const lines = pdf.splitTextToSize(value, maxW)
+    lines.forEach(line => {
+      ensureSpace(gap)
+      if (align === 'center') pdf.text(line, pageW / 2, y, { align: 'center' })
+      else pdf.text(line, margin + indent, y)
+      y += gap
+    })
+  }
+
+  const section = title => {
+    y += 10
+    ensureSpace(24)
+    text(title.toUpperCase(), { size: 10.5, color: ACCENT_RGB, bold: true, gap: 13 })
+    pdf.setDrawColor(ACCENT_RGB[0], ACCENT_RGB[1], ACCENT_RGB[2])
+    pdf.setLineWidth(0.8)
+    pdf.line(margin, y - 6, margin + width, y - 6)
+    y += 6
+  }
+
+  // Header
+  text(h.full_name || 'Your Name', { size: 20, bold: true, align: 'center', gap: 24 })
+  if (h.title) text(h.title, { size: 11.5, color: ACCENT_RGB, align: 'center', gap: 16 })
+  const contactParts = [contact.email, contact.phone, contact.location, contact.linkedin].map(clean).filter(Boolean)
+  if (contactParts.length) text(contactParts.join('   •   '), { size: 9, color: MUTED_RGB, align: 'center', gap: 16 })
+
+  if (o.summary) { section('Profile'); text(o.summary, { size: 10, gap: 14 }) }
+
+  if (Array.isArray(o.experience) && o.experience.length) {
+    section('Experience')
+    o.experience.forEach((exp, i) => {
+      const titleLine = [clean(exp.title), exp.company ? `@ ${clean(exp.company)}` : ''].filter(Boolean).join(' ')
+      ensureSpace(30)
+      if (titleLine) text(titleLine, { size: 11, bold: true, gap: 14 })
+      const meta = [clean(exp.dates), clean(exp.location)].filter(Boolean).join('  ·  ')
+      if (meta) text(meta, { size: 9, color: MUTED_RGB, italic: true, gap: 13 })
+      if (Array.isArray(exp.bullets)) exp.bullets.map(clean).filter(Boolean).forEach(b => text(`•  ${b}`, { size: 10, gap: 14, indent: 8 }))
+      if (i < o.experience.length - 1) y += 6
+    })
+  }
+
+  const skills = o.skills || {}
+  const skillLine = (label, arr) => {
+    const items = Array.isArray(arr) ? arr.map(clean).filter(Boolean) : []
+    if (!items.length) return
+    ensureSpace(16)
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...PRIMARY_RGB)
+    const labelText = `${label}: `
+    const labelW = pdf.getTextWidth(labelText)
+    pdf.text(labelText, margin, y)
+    pdf.setFont('helvetica', 'normal')
+    const lines = pdf.splitTextToSize(items.join(' · '), width - labelW)
+    lines.forEach((line, idx) => {
+      if (idx > 0) ensureSpace(14)
+      pdf.text(line, idx === 0 ? margin + labelW : margin, y)
+      y += 14
+    })
+  }
+  if ((skills.technical?.length || 0) + (skills.soft?.length || 0) + (skills.languages?.length || 0) > 0) {
+    section('Skills')
+    skillLine('Technical', skills.technical)
+    skillLine('Soft', skills.soft)
+    skillLine('Languages', skills.languages)
+  }
+
+  if (Array.isArray(o.education) && o.education.length) {
+    section('Education')
+    o.education.forEach(edu => {
+      if (edu.degree) text(clean(edu.degree), { size: 11, bold: true, gap: 14 })
+      const meta = [clean(edu.institution), clean(edu.location), clean(edu.dates)].filter(Boolean).join('  ·  ')
+      if (meta) text(meta, { size: 9, color: MUTED_RGB, italic: true, gap: 14 })
+    })
+  }
+
+  y += 12
+  text('— Optimized with Joblytics — Review carefully before sending —', { size: 8, color: MUTED_RGB, italic: true, align: 'center', gap: 12 })
+
+  pdf.save(fileName)
+}

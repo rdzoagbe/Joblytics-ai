@@ -104,6 +104,158 @@ function SummaryCard({ title, children }) {
   )
 }
 
+function ScoreMathCard({ breakdown, penalty, explanation, total }) {
+  if (!Array.isArray(breakdown) || !breakdown.length) return null
+  const score = safeScore(total, 0)
+  return (
+    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: 'rgba(255,255,255,0.5)', marginTop: 14 }}>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>How this score is calculated</h3>
+      {explanation && <p style={{ margin: '0 0 12px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>{explanation}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {breakdown.map(factor => {
+          const sub = safeScore(factor.score, 0)
+          const tone = scoreTone(sub)
+          return (
+            <div key={factor.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <span style={{ color: premium.navy, fontSize: 12.5, fontWeight: 700 }}>{factor.label}</span>
+                  <span style={{ color: premium.muted, fontSize: 11.5 }}>{sub}% × {factor.weight}% = <strong style={{ color: premium.navy }}>{factor.points}</strong> pts</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 4, background: 'rgba(16,24,43,0.08)', overflow: 'hidden' }}>
+                  <div style={{ width: `${sub}%`, height: '100%', background: tone }} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {penalty > 0 && (
+        <p style={{ margin: '10px 0 0', color: premium.red, fontSize: 12 }}>
+          − {penalty} pts penalty for missing several critical skills
+        </p>
+      )}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${premium.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: premium.navy, fontSize: 13, fontWeight: 950 }}>Final ATS score</span>
+        <strong style={{ color: scoreTone(score), fontSize: 18 }}>{score}%</strong>
+      </div>
+    </section>
+  )
+}
+
+function RequirementsCoverageCard({ items, proofGaps }) {
+  const rows = (Array.isArray(items) ? items : [])
+    .filter(r => r && typeof r === 'object' && String(r.requirement || '').trim())
+    .slice(0, 10)
+  if (!rows.length) return null
+
+  const meta = {
+    met: { label: 'Met', color: premium.green, bg: 'rgba(85,124,100,0.10)' },
+    partial: { label: 'Partial', color: premium.gold, bg: 'rgba(185,134,59,0.12)' },
+    missing: { label: 'Missing', color: premium.red, bg: 'rgba(184,92,85,0.10)' }
+  }
+  const proof = (Array.isArray(proofGaps) ? proofGaps : []).map(p => String(p || '').trim()).filter(Boolean).slice(0, 4)
+
+  return (
+    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: premium.paper, marginTop: 14 }}>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>Requirements coverage</h3>
+      <p style={{ margin: '0 0 12px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>
+        Each key requirement from the job, whether your CV shows it, and a truthful way to strengthen it — never claim what you haven't done.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map((r, i) => {
+          const m = meta[String(r.status || '').toLowerCase()] || meta.missing
+          const evidence = String(r.evidence || '').trim()
+          const suggestion = String(r.suggestion || '').trim()
+          return (
+            <div key={`req-${i}`} style={{ borderTop: i ? `1px solid ${premium.line}` : 'none', paddingTop: i ? 10 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', color: m.color, background: m.bg, border: `1px solid ${m.color}40`, borderRadius: 999, padding: '3px 9px', marginTop: 1 }}>{m.label}</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, color: premium.navy, fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{r.requirement}</p>
+                  {evidence && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.green }}>Your evidence:</strong> {evidence}</p>}
+                  {suggestion && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.copper }}>How to strengthen:</strong> {suggestion}</p>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {proof.length > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${premium.line}` }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 850, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.copper }}>Proof to add</p>
+          <ul style={{ margin: 0, paddingLeft: 18, color: premium.muted, fontSize: 12, lineHeight: 1.6 }}>
+            {proof.map((p, i) => <li key={`proof-${i}`}>{p}</li>)}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ImprovementPlanCard({ plan }) {
+  if (!plan || !Array.isArray(plan.addressable_skills) || !plan.addressable_skills.length) return null
+  const current = safeScore(plan.current_score, 0)
+  const considered = plan.to_considered
+  const interview = plan.to_interview
+  const alreadyInterview = !interview // null means already at/above the interview threshold
+
+  const Step = ({ tone, label, target, info }) => (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderTop: `1px solid ${premium.line}` }}>
+      <div style={{ width: 52, flexShrink: 0, textAlign: 'center' }}>
+        <strong style={{ color: tone, fontSize: 18 }}>{target}</strong>
+        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.muted }}>target</div>
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: '0 0 3px', color: premium.navy, fontSize: 13, fontWeight: 800 }}>{label}</p>
+        <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.5 }}>{info}</p>
+      </div>
+    </div>
+  )
+
+  const skillList = skills => skills.map(s => <Tag key={`plan-${s}`} label={s} type="missing" />)
+
+  return (
+    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: premium.copperSoft, marginTop: 14 }}>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>Your path to an interview</h3>
+      <p style={{ margin: '0 0 6px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>
+        You're at <strong style={{ color: premium.navy }}>{current}%</strong> today. Here's what evidencing more of the role's skills on your CV would do to your score — using the same scoring engine, so these projections are real.
+      </p>
+
+      {considered && considered.reachable && (
+        <Step tone={premium.gold} target={`${considered.projected_score}%`}
+          label={`Get considered — evidence ${considered.skills_needed} skill${considered.skills_needed > 1 ? 's' : ''}`}
+          info="Crosses the threshold where an ATS/recruiter is likely to keep reading rather than auto-filter." />
+      )}
+      {interview && interview.reachable && (
+        <Step tone={premium.green} target={`${interview.projected_score}%`}
+          label={`Become interview-likely — evidence ${interview.skills_needed} skill${interview.skills_needed > 1 ? 's' : ''}`}
+          info="Comfortably clears the filter for most ATS-screened roles." />
+      )}
+      {interview && !interview.reachable && (
+        <Step tone={premium.red} target={`~${interview.projected_score}%`}
+          label="Skills alone won't reach interview-likely"
+          info="Even evidencing every missing skill caps out below the interview bar — the remaining gap is depth of experience or seniority for this role, not keywords." />
+      )}
+      {alreadyInterview && (
+        <Step tone={premium.green} target={`${current}%`}
+          label="You're already interview-likely"
+          info="Your score clears the typical ATS filter. Focus on tailoring and interview prep rather than the score." />
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 850, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.copper }}>
+          Skills to evidence (only if you genuinely have them)
+        </p>
+        <div>{skillList(plan.addressable_skills.slice(0, 10))}</div>
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, color: premium.muted, lineHeight: 1.5, fontStyle: 'italic' }}>
+          Add concrete proof — projects, results, tools used — for any of these you've actually done. Never claim skills you don't have; recruiters verify in interviews.
+        </p>
+      </div>
+    </section>
+  )
+}
+
 function ScoreBreakdownCard({ label, score, helper, color }) {
   const s = safeScore(score, 0)
   const tone = color || scoreTone(s)
@@ -295,6 +447,10 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
         <SummaryCard title="Requirements met"><BulletList items={met} tone="good" empty="No met requirements returned." max={5} /></SummaryCard>
         <SummaryCard title="Requirements missing"><BulletList items={unmet} tone="bad" empty="No missing requirements detected." max={5} /></SummaryCard>
       </div>
+
+      <ScoreMathCard breakdown={data.score_breakdown} penalty={data.score_penalty} explanation={data.score_explanation} total={data.display_score} />
+      <RequirementsCoverageCard items={data.requirements_coverage} proofGaps={data.proof_gaps} />
+      <ImprovementPlanCard plan={data.improvement_plan} />
     </section>
   )
 }

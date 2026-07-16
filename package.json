@@ -7,12 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test api/*.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.102.0",
-    "@sentry/react": "^10.56.0",
-    "@supabase/supabase-js": "^2.107.0",
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@sentry/react": "^10.57.0",
+    "@supabase/supabase-js": "^2.108.2",
     "@vercel/analytics": "^2.0.1",
     "docx": "^9.7.1",
     "express": "^4.18.3",

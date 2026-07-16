@@ -5,15 +5,23 @@ import { applyDeterministicAts, validateJobTextQuality } from './ats-determinist
 
 export const config = { maxDuration: 60 }
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
+// Time budget so the function always returns before maxDuration (avoids 504s). The AI
+// step gets everything up to AI_BUDGET_MS from request start; each call is capped to the
+// remaining time, and we won't start an attempt with less than MIN_AI_ATTEMPT_MS left.
+const AI_BUDGET_MS = 48000
+const MAX_AI_CALL_MS = 40000
+const MIN_AI_ATTEMPT_MS = 9000
+
+const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 const JOB_TEXT_LIMIT = 6000
 const CV_TEXT_LIMIT = 6000
-const CACHE_VERSION = 'ats-v11-jina-first-restore'
+const CACHE_VERSION = 'ats-v12-sonnet'
 
 const SYSTEM = `You are Joblytics-AI, a strict ATS analyst and career coach.
 Return ONLY valid JSON. No markdown.
 Do not invent experience. Do not assume a candidate has a tool unless it appears in the CV or is a strict industry synonym.
 The final score will be calculated by the server. Your job is to extract context, explain gaps, and give useful coaching.
+For requirements_coverage: take the 5-8 most important requirements/responsibilities from the job, and for EACH judge whether the candidate's CV clearly meets it (status met), partially/implicitly meets it (partial), or does not show it (missing). evidence must be grounded in the actual CV text. suggestion must be truthful: only propose surfacing or rephrasing things the candidate plausibly did, or learning/acquiring a genuinely missing skill — never instruct them to claim experience they don't have.
 
 Return this JSON shape:
 {
@@ -25,6 +33,7 @@ Return this JSON shape:
   "next_best_action": { "action": "apply_now|improve_cv_first|prepare_interview|ask_recruiter_question|skip_or_low_priority", "label": "string", "reason": "string", "steps": [] },
   "confidence": { "level": "high|medium|low", "score": 0, "reasons": [], "job_text_quality": "strong|partial|thin", "cv_text_quality": "strong|partial|thin" },
   "semantic_fit": { "score": 0, "matched_responsibilities": [], "weak_or_missing_responsibilities": [], "domain_fit": "strong|moderate|weak", "domain_reason": "string" },
+  "requirements_coverage": [{ "requirement": "<a concrete requirement or responsibility from the job>", "status": "met|partial|missing", "evidence": "<short quote/paraphrase of the CV proof, or empty if none>", "suggestion": "<truthful, specific way to address it on the CV WITHOUT inventing anything; if met, say how to make it stronger>" }],
   "experience_depth": { "score": 0, "hands_on": "visible|weak_or_missing|unclear", "leadership": "visible|weak_or_missing|unclear", "scale": "visible|weak_or_missing|unclear", "metrics": "visible|weak_or_missing|unclear", "ownership": "visible|weak_or_missing|unclear", "proof_summary": "string" },
   "proof_gaps": [],
   "hidden_expectations": [],
@@ -228,8 +237,84 @@ async function fetchDirectHtml(url) {
   return { text, provider: 'direct-html' }
 }
 
+// Extract the numeric LinkedIn job id from the various URL shapes LinkedIn uses.
+export function linkedInJobId(url) {
+  const s = String(url || '')
+  if (!/(^|\.)linkedin\.[a-z.]+/i.test(s)) return null
+  let m = s.match(/\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/i)
+  if (m) return m[1]
+  m = s.match(/[?&](?:currentJobId|jobId|refId)=(\d{6,})/i)
+  if (m) return m[1]
+  m = s.match(/\/jobs-guest\/jobs\/api\/jobPosting\/(\d{6,})/i)
+  if (m) return m[1]
+  return null
+}
+
+// Pull just the job description (and title/company) out of the LinkedIn guest fragment,
+// dropping the surrounding "Sign in / Join now" chrome that would otherwise look like an
+// anti-bot wall to the quality validator. Returns null when the real description markup
+// isn't present (e.g. LinkedIn served a login wall because it rate-limited us).
+export function parseLinkedInGuestHtml(html = '') {
+  const startIdx = html.search(/show-more-less-html__markup|description__text/i)
+  if (startIdx === -1) return null
+  // From the description container up to the "see more / set job alerts" footer chrome.
+  let body = html.slice(startIdx)
+  body = body.split(/show-more-less-html__button|jobs?-description__footer|sign in to set job alerts|set job alerts/i)[0]
+  const desc = cleanText(body, JOB_TEXT_LIMIT)
+  if (!desc || desc.length < 200) return null
+
+  const pick = re => { const m = html.match(re); return m ? cleanText(m[1] || '', 300).trim() : '' }
+  const title = pick(/<h2[^>]*class="[^"]*top-card-layout__title[^"]*"[^>]*>([\s\S]*?)<\/h2>/i)
+  const company = pick(/<a[^>]*class="[^"]*topcard__org-name-link[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+  const header = [title && `Job title: ${title}`, company && `Company: ${company}`].filter(Boolean).join('\n')
+  return (header ? `${header}\n\n` : '') + desc
+}
+
+async function fetchLinkedInGuest(jobId) {
+  const guestUrl = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${jobId}`
+  // The guest endpoint returns a public HTML fragment of the posting; try a direct fetch
+  // first (fast), then fall back to Jina if LinkedIn rate-limits the direct request.
+  try {
+    const res = await fetchWithTimeout(guestUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8'
+      },
+      redirect: 'follow'
+    }, 9000)
+    if (res.ok) {
+      const text = parseLinkedInGuestHtml(await res.text())
+      if (text && text.length >= 200) return { text, provider: 'linkedin-guest', jinaTarget: guestUrl }
+    }
+  } catch {}
+  try {
+    const viaJina = await fetchViaJina(guestUrl)
+    // Only trust the Jina markdown if it carries real posting content rather than a wall.
+    const t = viaJina?.text || ''
+    const wallish = /sign in to (view|continue|set job alerts)|join (now|linkedin) to/i.test(t)
+    if (t.length >= 400 && !wallish) return { ...viaJina, provider: 'linkedin-guest-jina' }
+  } catch {}
+  return null
+}
+
 async function fetchJobText(url) {
   const attempts = []
+
+  // LinkedIn /jobs/view/ pages are gated behind a login/anti-bot wall, so generic
+  // extraction returns the wall instead of the posting. LinkedIn does expose a public
+  // "guest" job-posting endpoint, so when we recognize a LinkedIn job URL we extract the
+  // numeric job id and fetch that instead.
+  const liJobId = linkedInJobId(url)
+  if (liJobId) {
+    try {
+      const guest = await fetchLinkedInGuest(liJobId)
+      if (guest) return guest
+      attempts.push({ provider: 'linkedin-guest', code: 'LINKEDIN_GUEST_WEAK' })
+    } catch (error) {
+      attempts.push({ provider: 'linkedin-guest', code: error?.code || 'LINKEDIN_GUEST_FAILED', message: error?.message })
+    }
+  }
 
   try {
     return await fetchViaJina(url)
@@ -279,16 +364,21 @@ function getAnthropicClient() {
   return new Anthropic({ apiKey: apiKey.trim() })
 }
 
-async function runClaudeAnalysis(jobText, cvText) {
+async function runClaudeAnalysis(jobText, cvText, deadline = Date.now() + AI_BUDGET_MS) {
   const client = getAnthropicClient()
   if (!client) return {}
   const userContent = `[JOB DESCRIPTION]\n${jobText.slice(0, JOB_TEXT_LIMIT)}\n\n[CANDIDATE RESUME]\n${cvText.slice(0, CV_TEXT_LIMIT)}`
 
-  // The AI explanation is the difference between a real analysis and a bare
-  // keyword estimate, so make it resilient: retry transient failures and one
-  // malformed-JSON response before giving up to the deterministic fallback.
+  // The AI explanation is the difference between a real analysis and a bare keyword
+  // estimate, so make it resilient: retry transient failures and one malformed-JSON
+  // response. But never overrun the serverless deadline — each attempt's timeout is
+  // capped to the remaining budget, and we stop retrying once too little time is left,
+  // so the caller can fall back to the deterministic result instead of 504-ing.
   let lastError = null
   for (let attempt = 0; attempt < 3; attempt++) {
+    const remaining = deadline - Date.now()
+    if (remaining < MIN_AI_ATTEMPT_MS) break
+    const callTimeout = Math.min(MAX_AI_CALL_MS, remaining - 1500)
     try {
       const message = await client.messages.create(
         {
@@ -298,7 +388,7 @@ async function runClaudeAnalysis(jobText, cvText) {
           system: SYSTEM,
           messages: [{ role: 'user', content: userContent }]
         },
-        { timeout: 45000, maxRetries: 0 }
+        { timeout: callTimeout, maxRetries: 0 }
       )
       const raw = (message.content || []).map(block => block.text || '').join('').trim()
       return extractJsonObject(raw)
@@ -307,7 +397,10 @@ async function runClaudeAnalysis(jobText, cvText) {
       const status = error?.status || error?.statusCode
       const retryable = !status || status === 408 || status === 429 || status >= 500 || error?.name === 'APIConnectionError' || /malformed json/i.test(error?.message || '')
       if (!retryable || attempt === 2) break
-      await new Promise(resolve => setTimeout(resolve, 600 * (attempt + 1)))
+      const backoff = 600 * (attempt + 1)
+      // Only retry if a full attempt would still fit inside the budget.
+      if (deadline - Date.now() < backoff + MIN_AI_ATTEMPT_MS) break
+      await new Promise(resolve => setTimeout(resolve, backoff))
     }
   }
   throw lastError || new Error('AI explanation failed')
@@ -333,6 +426,7 @@ function publicError(error) {
 }
 
 export default async function handler(req, res) {
+  const requestStart = Date.now()
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -371,7 +465,11 @@ export default async function handler(req, res) {
     let aiResult = {}
     let providerError = null
     if (!skipAi) {
-      try { aiResult = await runClaudeAnalysis(jobText, cvText) }
+      // Stay inside the serverless maxDuration: give the AI step whatever time is
+      // left under a safe budget so we always return a (deterministic) result rather
+      // than letting the platform kill the function with a 504.
+      const aiDeadline = requestStart + AI_BUDGET_MS
+      try { aiResult = await runClaudeAnalysis(jobText, cvText, aiDeadline) }
       catch (error) { providerError = { code: error?.code || error?.type || 'AI_EXPLANATION_FAILED', message: error?.message || 'AI explanation failed' } }
     }
 

@@ -80,7 +80,64 @@ const SKILL_LEXICON = [
   ['pre-sales', ['pre-sales','presales','avant-vente','preventa','vorverkauf','prevendita']],
   ['mentoring', ['mentoring','mentorat','mentoria','mentoring']],
   ['process improvement', ['process improvement','amelioration des processus','mejora de procesos','prozessverbesserung','melhoria de processos','miglioramento dei processi']],
-  ['compliance', ['compliance','conformite','cumplimiento','conformidade','conformita','naleving']]
+  ['compliance', ['compliance','conformite','cumplimiento','conformidade','conformita','naleving']],
+  // Data / AI
+  ['machine learning', ['machine learning','apprentissage automatique','aprendizaje automatico','maschinelles lernen','aprendizado de maquina','apprendimento automatico']],
+  ['artificial intelligence', ['artificial intelligence','intelligence artificielle','inteligencia artificial','kunstliche intelligenz','inteligencia artificial','intelligenza artificiale']],
+  ['data science', ['data science','science des donnees','ciencia de datos','datenwissenschaft','ciencia de dados']],
+  ['data engineering', ['data engineering','ingenierie des donnees','ingenieria de datos','dateningenieurwesen']],
+  ['business intelligence', ['business intelligence','informatique decisionnelle','inteligencia de negocios','geschaftsanalytik']],
+  ['statistics', ['statistics','statistiques','estadistica','statistik','estatistica','statistica']],
+  ['data visualization', ['data visualization','visualisation de donnees','visualizacion de datos','datenvisualisierung','visualizacao de dados']],
+  ['etl', ['etl','extract transform load','extraction transformation chargement']],
+  // Software / engineering
+  ['object oriented programming', ['object oriented programming','programmation orientee objet','programacion orientada a objetos','objektorientierte programmierung']],
+  ['microservices', ['microservices','microservicios','mikroservices','microsservicos']],
+  ['system design', ['system design','conception de systemes','diseno de sistemas','systemdesign']],
+  ['mobile development', ['mobile development','developpement mobile','desarrollo movil','mobile entwicklung','desenvolvimento mobile']],
+  ['version control', ['version control','gestion de versions','control de versiones','versionskontrolle','git']],
+  ['testing', ['testing','tests','pruebas','softwaretest','automated testing','tests automatises']],
+  ['debugging', ['debugging','debogage','depuracion','fehlerbehebung']],
+  ['code review', ['code review','revue de code','revision de codigo','code-review']],
+  ['data structures', ['data structures','structures de donnees','estructuras de datos','datenstrukturen']],
+  // Marketing / sales / content
+  ['seo', ['seo','search engine optimization','referencement naturel','optimizacion de motores de busqueda','suchmaschinenoptimierung']],
+  ['content marketing', ['content marketing','marketing de contenu','marketing de contenidos','content-marketing','marketing de conteudo']],
+  ['social media', ['social media','reseaux sociaux','redes sociales','soziale medien','midias sociais','social media management']],
+  ['copywriting', ['copywriting','redaction publicitaire','redaccion publicitaria','texterstellung','redacao']],
+  ['brand management', ['brand management','gestion de marque','gestion de marca','markenmanagement','gestao de marca']],
+  ['market research', ['market research','etude de marche','investigacion de mercado','marktforschung','pesquisa de mercado']],
+  ['email marketing', ['email marketing','marketing par email','marketing por correo','e-mail-marketing']],
+  ['lead generation', ['lead generation','generation de leads','generacion de leads','leadgenerierung']],
+  // Finance / legal / operations
+  ['financial analysis', ['financial analysis','analyse financiere','analisis financiero','finanzanalyse','analise financeira']],
+  ['financial modeling', ['financial modeling','modelisation financiere','modelado financiero','finanzmodellierung']],
+  ['forecasting', ['forecasting','prevision','pronostico','prognose','previsao']],
+  ['tax', ['tax','fiscalite','impuestos','steuern','impostos','taxation']],
+  ['treasury', ['treasury','tresorerie','tesoreria','finanzwesen']],
+  ['legal', ['legal','juridique','juridico','rechtlich','legale','contract law','droit des contrats']],
+  ['operations management', ['operations management','gestion des operations','gestion de operaciones','betriebsmanagement','gestao de operacoes']],
+  ['inventory management', ['inventory management','gestion des stocks','gestion de inventario','bestandsmanagement','gestao de estoque']],
+  ['vendor management', ['vendor management','gestion des fournisseurs','gestion de proveedores','lieferantenmanagement']],
+  // Healthcare / education / people
+  ['patient care', ['patient care','soins aux patients','atencion al paciente','patientenversorgung','cuidados ao paciente']],
+  ['clinical', ['clinical','clinique','clinico','klinisch','clinico']],
+  ['nursing', ['nursing','soins infirmiers','enfermeria','krankenpflege','enfermagem']],
+  ['teaching', ['teaching','enseignement','ensenanza','lehre','ensino','docencia']],
+  ['curriculum development', ['curriculum development','conception pedagogique','desarrollo curricular','lehrplanentwicklung']],
+  ['coaching', ['coaching','accompagnement','entrenamiento','begleitung']],
+  ['performance management', ['performance management','gestion de la performance','gestion del desempeno','leistungsmanagement','gestao de desempenho']],
+  // Design / product / cross-functional
+  ['ux design', ['ux design','user experience','experience utilisateur','experiencia de usuario','nutzererfahrung','experiencia do usuario']],
+  ['ui design', ['ui design','user interface','interface utilisateur','interfaz de usuario','benutzeroberflache']],
+  ['graphic design', ['graphic design','design graphique','diseno grafico','grafikdesign','design grafico']],
+  ['product design', ['product design','design produit','diseno de producto','produktdesign']],
+  ['roadmap', ['roadmap','feuille de route','hoja de ruta','produkt-roadmap']],
+  ['kpi', ['kpi','key performance indicators','indicateurs de performance','indicadores de desempeno','leistungskennzahlen']],
+  ['time management', ['time management','gestion du temps','gestion del tiempo','zeitmanagement','gestao do tempo']],
+  ['adaptability', ['adaptability','adaptabilite','adaptabilidad','anpassungsfahigkeit','adaptabilidade']],
+  ['critical thinking', ['critical thinking','esprit critique','pensamiento critico','kritisches denken','pensamento critico']],
+  ['attention to detail', ['attention to detail','souci du detail','atencion al detalle','liebe zum detail','atencao aos detalhes']]
 ]
 
 // All language-neutral canonical skills (tech + multilingual lexicon). A required
@@ -175,11 +232,20 @@ function canonicalSkill(term = '') {
 // Find which canonical lexicon skills appear in the text, in any supported language.
 // Used alongside TECH_PATTERNS so multilingual business/soft skills extract cleanly
 // instead of leaking through as prose fragments.
+function escapeRegExp(value = '') {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function lexiconSkillsIn(text = '') {
-  const padded = ` ${normalizeText(text)} `
+  const normalized = normalizeText(text)
   const found = []
   for (const [canonical, forms] of SKILL_LEXICON) {
-    if (forms.some(form => padded.includes(` ${normalizeText(form)} `))) found.push(canonical)
+    // Match on alphanumeric word boundaries so adjacent punctuation (e.g. a trailing
+    // "." that normalizeText keeps for tokens like "node.js") doesn't hide a skill.
+    if (forms.some(form => {
+      const f = normalizeText(form)
+      return f && new RegExp(`(^|[^a-z0-9])${escapeRegExp(f)}([^a-z0-9]|$)`).test(normalized)
+    })) found.push(canonical)
   }
   return found
 }
@@ -344,6 +410,132 @@ function scoreSeniority(candidateYears, requiredYears) {
   return 25
 }
 
+// Pure scoring math, shared by the live score and the improvement simulator so a
+// "what if I add this skill" projection uses the exact same formula as the real score.
+function computeAtsScores(matchedCount, requiredCount, missingCount, experienceScore, seniorityScore) {
+  const clamp = value => Math.max(0, Math.min(100, Math.round(value)))
+  const keywordScore = requiredCount ? Math.round((matchedCount / requiredCount) * 100) : 50
+  const semanticScore = Math.round((keywordScore * 0.65) + (experienceScore * 0.35))
+  const criticalGapPenalty = Math.min(20, Math.min(Math.max(0, missingCount), 4) * 5)
+  const displayScore = clamp(
+    keywordScore * 0.35 +
+    experienceScore * 0.30 +
+    semanticScore * 0.20 +
+    seniorityScore * 0.10 +
+    70 * 0.05 -
+    criticalGapPenalty
+  )
+  const matchProbability = clamp(
+    keywordScore * 0.20 +
+    experienceScore * 0.30 +
+    semanticScore * 0.25 +
+    seniorityScore * 0.25 -
+    criticalGapPenalty * 0.5
+  )
+  const verdict = displayScore >= 75 ? 'likely_passed' : displayScore >= 55 ? 'borderline' : 'likely_filtered'
+  return { keywordScore, semanticScore, criticalGapPenalty, displayScore, matchProbability, verdict }
+}
+
+// Borderline = considered by an ATS/recruiter; interview = comfortably passes the filter.
+const CONSIDERED_THRESHOLD = 55
+const INTERVIEW_THRESHOLD = 75
+
+// Project how the score would move if the candidate evidenced the missing skills, using
+// the real scoring formula. The engine weights all skills equally, so we don't fake
+// per-skill rankings; instead we report the cumulative path and how many skills are
+// needed to cross each threshold — and honestly flag when skills alone can't get there
+// (because the remaining gap is experience/seniority, not keywords).
+export function simulateImprovements(ats) {
+  const requiredCount = ats.requiredSkills.length
+  const baseMatched = ats.matchedSkills.length
+  const baseMissing = ats.missingSkills.length
+  const current = ats.displayScore
+  if (!requiredCount || baseMissing === 0) {
+    return { current_score: current, addressable_skills: [], per_skill_points: 0, max_projected_score: current, to_considered: null, to_interview: null }
+  }
+
+  // Cumulative path: evidence missing skills one at a time, recomputing each step.
+  const ordered = [...ats.missingSkills]
+  const cumulative = ordered.map((skill, index) => {
+    const added = index + 1
+    const s = computeAtsScores(baseMatched + added, requiredCount, baseMissing - added, ats.experienceScore, ats.seniorityScore)
+    return { skill, skills_addressed: added, projected_score: s.displayScore, verdict: s.verdict }
+  })
+  const maxProjected = cumulative[cumulative.length - 1].projected_score
+  const firstStepGain = Math.max(0, cumulative[0].projected_score - current)
+
+  const reach = threshold => {
+    if (current >= threshold) return null
+    const hit = cumulative.find(step => step.projected_score >= threshold)
+    return hit
+      ? { reachable: true, skills_needed: hit.skills_addressed, projected_score: hit.projected_score, skills: ordered.slice(0, hit.skills_addressed) }
+      : { reachable: false, projected_score: maxProjected }
+  }
+
+  return {
+    current_score: current,
+    addressable_skills: ordered,
+    per_skill_points: firstStepGain,
+    max_projected_score: maxProjected,
+    to_considered: reach(CONSIDERED_THRESHOLD),
+    to_interview: reach(INTERVIEW_THRESHOLD)
+  }
+}
+
+// One plain-language sentence explaining the verdict in terms of concrete strengths/gaps.
+function describeScore({ verdict, keywordScore, experienceScore, seniorityScore }) {
+  const strengths = []
+  const gaps = []
+  if (keywordScore >= 70) strengths.push('strong skill/keyword overlap')
+  else if (keywordScore < 50) gaps.push('several required skills are missing')
+  if (experienceScore >= 75) strengths.push('enough years of experience')
+  else if (experienceScore < 55) gaps.push('less experience than the role asks for')
+  if (seniorityScore >= 75) strengths.push('a seniority level that fits')
+  else if (seniorityScore < 50) gaps.push('a seniority mismatch')
+  const lead = verdict === 'likely_passed'
+    ? 'You likely pass the ATS filter for this role.'
+    : verdict === 'borderline'
+      ? 'You are a borderline fit — an ATS or recruiter could go either way.'
+      : 'You would likely be filtered out by an ATS for this role.'
+  const s = strengths.length ? ` Strengths: ${strengths.join(', ')}.` : ''
+  const g = gaps.length ? ` Main gaps: ${gaps.join(', ')}.` : ''
+  return `${lead}${s}${g}`.trim()
+}
+
+// Coercion helpers + a normalizer that guarantees the analysis object always has the
+// full expected shape with safe defaults, so a partial/malformed AI response can never
+// leave the UI rendering blanks or crashing on undefined.
+const asStr = (value, fallback = '') => (typeof value === 'string' && value.trim() ? value : fallback)
+const asArr = value => (Array.isArray(value) ? value : [])
+const asObj = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : {})
+
+export function normalizeAnalysisShape(analysis) {
+  const a = asObj(analysis)
+  return {
+    ...a,
+    job_context: { title: 'Not specified', company: 'Not specified', location: 'Not specified', work_mode: 'unknown', contract_type: 'unknown', salary_range: 'Not specified', experience_required: 'Not specified', languages_required: [], apply_url: null, easy_apply: false, hiring_contact: null, hiring_contact_linkedin: null, ...asObj(a.job_context) },
+    job_sections: { about_company: null, about_role: null, key_responsibilities: [], key_requirements: [], benefits: null, ...asObj(a.job_sections) },
+    job_summary: asStr(a.job_summary),
+    match_reasoning: asStr(a.match_reasoning),
+    recruiter_shortlist: { probability: 0, verdict: 'possible_shortlist', reason: '', top_screening_factors: [], likely_recruiter_concerns: [], ...asObj(a.recruiter_shortlist) },
+    next_best_action: { action: '', label: '', reason: '', steps: [], ...asObj(a.next_best_action) },
+    confidence: { level: 'low', score: 0, reasons: [], job_text_quality: 'partial', cv_text_quality: 'partial', ...asObj(a.confidence) },
+    semantic_fit: { score: 0, matched_responsibilities: [], weak_or_missing_responsibilities: [], domain_fit: 'moderate', domain_reason: '', ...asObj(a.semantic_fit) },
+    requirements_coverage: asArr(a.requirements_coverage),
+    experience_depth: { score: 0, hands_on: 'unclear', leadership: 'unclear', scale: 'unclear', metrics: 'unclear', ownership: 'unclear', proof_summary: '', ...asObj(a.experience_depth) },
+    proof_gaps: asArr(a.proof_gaps),
+    hidden_expectations: asArr(a.hidden_expectations),
+    red_flags: asArr(a.red_flags),
+    salary_assessment: { specified: false, assessment: 'unknown', comment: '', ...asObj(a.salary_assessment) },
+    verdict: asStr(a.verdict),
+    overall_reason: asStr(a.overall_reason),
+    format_warnings: asArr(a.format_warnings),
+    quick_wins: asArr(a.quick_wins),
+    jobseeker_strategy: { apply_message_angle: '', follow_up_timing: '', questions_to_ask_recruiter: [], skip_reason: null, ...asObj(a.jobseeker_strategy) },
+    interview_prep: { show_prep: true, likely_questions: [], your_edges: [], weak_spots: [], salary_negotiation_hint: '', ...asObj(a.interview_prep) }
+  }
+}
+
 export function buildDeterministicAts(jobText = '', cvText = '') {
   const requiredSkills = extractSkillTerms(jobText, 22)
   const candidateSkills = extractSkillTerms(cvText, 40)
@@ -356,23 +548,12 @@ export function buildDeterministicAts(jobText = '', cvText = '') {
     else missing.push(required)
   }
 
-  const keywordScore = requiredSkills.length ? Math.round((matched.length / requiredSkills.length) * 100) : 50
   const candidateYears = estimateYears(cvText)
   const requiredYears = estimateYears(jobText)
   const experienceScore = scoreExperience(candidateYears, requiredYears)
   const seniorityScore = scoreSeniority(candidateYears, requiredYears)
-  const semanticScore = Math.round((keywordScore * 0.65) + (experienceScore * 0.35))
-  const criticalGapPenalty = Math.min(20, missing.slice(0, 4).length * 5)
-  const displayScore = Math.max(0, Math.min(100, Math.round(
-    keywordScore * 0.35 +
-    experienceScore * 0.30 +
-    semanticScore * 0.20 +
-    seniorityScore * 0.10 +
-    70 * 0.05 -
-    criticalGapPenalty
-  )))
-
-  const verdict = displayScore >= 75 ? 'likely_passed' : displayScore >= 55 ? 'borderline' : 'likely_filtered'
+  const scores = computeAtsScores(matched.length, requiredSkills.length, missing.length, experienceScore, seniorityScore)
+  const { keywordScore, semanticScore, displayScore, verdict } = scores
 
   // Decide whether the keyword overlap is trustworthy enough to drive the headline
   // score. It is NOT when the job and CV are in different languages (literal matching
@@ -391,13 +572,18 @@ export function buildDeterministicAts(jobText = '', cvText = '') {
 
   // match_probability reflects interview chances rather than ATS keyword passthrough,
   // so it leans more on experience/seniority fit and less on raw keyword density.
-  const matchProbability = Math.max(0, Math.min(100, Math.round(
-    keywordScore * 0.20 +
-    experienceScore * 0.30 +
-    semanticScore * 0.25 +
-    seniorityScore * 0.25 -
-    criticalGapPenalty * 0.5
-  )))
+  const matchProbability = scores.matchProbability
+
+  // Transparent breakdown: how each weighted factor contributes to the headline number,
+  // so the score is explainable instead of a black box.
+  const scoreBreakdown = [
+    { key: 'keywords', label: 'Keyword & skill match', score: keywordScore, weight: 35 },
+    { key: 'experience', label: 'Experience fit', score: experienceScore, weight: 30 },
+    { key: 'semantic', label: 'Role / semantic fit', score: semanticScore, weight: 20 },
+    { key: 'seniority', label: 'Seniority fit', score: seniorityScore, weight: 10 },
+    { key: 'baseline', label: 'Baseline', score: 70, weight: 5 }
+  ].map(factor => ({ ...factor, points: Math.round((factor.score * factor.weight) / 100 * 10) / 10 }))
+  const scoreExplanation = describeScore({ verdict, keywordScore, experienceScore, seniorityScore })
 
   return {
     deterministic: true,
@@ -416,13 +602,18 @@ export function buildDeterministicAts(jobText = '', cvText = '') {
     requiredYears,
     languageMismatch,
     keywordSignalReliable,
+    criticalGapPenalty: scores.criticalGapPenalty,
+    scoreBreakdown,
+    scoreExplanation,
     confidence: !keywordSignalReliable ? 'low' : requiredSkills.length >= 6 ? 'medium' : 'low'
   }
 }
 
 export function applyDeterministicAts(analysis, jobText = '', cvText = '') {
   const ats = buildDeterministicAts(jobText, cvText)
-  const merged = { ...(analysis || {}) }
+  // Guarantee a complete, well-typed shape so the UI never renders blanks on a partial
+  // or malformed AI response, then overlay the deterministic fields below.
+  const merged = normalizeAnalysisShape(analysis)
   const matchedLabels = ats.matchedSkills.map(item => item.required_skill)
   const missingLabels = ats.missingSkills
 
@@ -504,6 +695,22 @@ export function applyDeterministicAts(analysis, jobText = '', cvText = '') {
   merged.gaps_to_address = unique([...(merged.gaps_to_address || []), ...missingLabels]).slice(0, 8)
   merged.quick_wins = unique([...(merged.quick_wins || []), ...missingLabels.slice(0, 4).map(skill => `Add truthful evidence for ${skill} if you have it.`)]).slice(0, 6)
 
+  // Requirement-by-requirement coverage: prefer the AI's grounded, per-requirement read.
+  // When the AI didn't run (or returned none), synthesize a skill-level coverage map from
+  // the deterministic match so the user still sees, per required skill, whether their CV
+  // shows it and a truthful way to address it.
+  const aiCoverage = Array.isArray(analysis?.requirements_coverage)
+    ? analysis.requirements_coverage.filter(item => item && typeof item === 'object' && asStr(item.requirement))
+    : []
+  if (aiCoverage.length) {
+    merged.requirements_coverage = aiCoverage.slice(0, 10)
+  } else {
+    merged.requirements_coverage = [
+      ...matchedLabels.map(skill => ({ requirement: skill, status: 'met', evidence: 'Found in your CV.', suggestion: 'Keep it — add a concrete result or metric to make it stronger.' })),
+      ...missingLabels.map(skill => ({ requirement: skill, status: 'missing', evidence: '', suggestion: `Add truthful evidence of ${skill} if you have it — a project, tool, or result that shows it.` }))
+    ].slice(0, 12)
+  }
+
   merged.keyword_signal_reliable = ats.keywordSignalReliable
   merged.language_check.mismatch = merged.language_check.mismatch || ats.languageMismatch
 
@@ -521,6 +728,15 @@ export function applyDeterministicAts(analysis, jobText = '', cvText = '') {
     // (if any) is clean and genuinely useful guidance — keep it rather than blanking it.
     // The score is still deferred and confidence lowered because keyword *coverage* is thin.
     if (!Number.isFinite(aiSemantic)) merged.confidence = { ...(merged.confidence || {}), level: 'low' }
+  }
+
+  // Path-to-interview simulator + transparent breakdown: only attach when the keyword
+  // signal is trustworthy, so projections and the breakdown reflect the number shown.
+  if (ats.keywordSignalReliable) {
+    if (ats.missingSkills.length) merged.improvement_plan = simulateImprovements(ats)
+    merged.score_breakdown = ats.scoreBreakdown
+    merged.score_penalty = ats.criticalGapPenalty
+    merged.score_explanation = ats.scoreExplanation
   }
 
   return merged
