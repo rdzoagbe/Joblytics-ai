@@ -9,6 +9,10 @@
   is missing, it returns a deterministic rule-based analysis so the frontend can still be tested.
 */
 
+// Sonnet generation up to ~4200 tokens can exceed Vercel's default 10s timeout and 504
+// (a killed request still costs tokens). Give the function the full budget.
+export const config = { maxDuration: 60 }
+
 const DEFAULT_MODEL = 'claude-sonnet-4-6'
 const MAX = {
   headline: 220,
