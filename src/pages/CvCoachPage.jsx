@@ -187,7 +187,7 @@ function CoverLetterPanel({ selected, t, lang, fullName, saveFullName }) {
       }
       if (!nameToUse) { setEditingName(true); setGenError(t('name_required_first')); setGenLoading(false); return }
 
-      const token = session?.access_token || (await supabase.auth.getSession()).data?.session?.access_token
+      const token = (await supabase.auth.getSession()).data?.session?.access_token
       const res = await fetch('/api/cover-letter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
