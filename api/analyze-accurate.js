@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'crypto'
+import dns from 'dns'
+import net from 'net'
 import { applyDeterministicAts, validateJobTextQuality } from './ats-deterministic.js'
 
 export const config = { maxDuration: 60 }
@@ -173,6 +175,63 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
+// --- SSRF protection for user-supplied job URLs ------------------------------------------
+// The job URL is attacker-controlled and gets fetched server-side, so it must never be used
+// to reach internal/metadata addresses. We reject non-http(s), block known-internal hostnames,
+// and DNS-resolve the host to confirm every address is public before fetching.
+function isPrivateIp(ip) {
+  const addr = String(ip || '').toLowerCase()
+  if (net.isIPv4(addr)) {
+    const p = addr.split('.').map(Number)
+    if (p[0] === 0 || p[0] === 10 || p[0] === 127) return true
+    if (p[0] === 169 && p[1] === 254) return true                 // link-local + cloud metadata
+    if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true
+    if (p[0] === 192 && p[1] === 168) return true
+    if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return true    // CGNAT (incl. 100.100.x metadata)
+    return false
+  }
+  if (addr === '::1' || addr === '::' || addr === '') return true
+  if (addr.startsWith('fe80')) return true                        // IPv6 link-local
+  if (addr.startsWith('fc') || addr.startsWith('fd')) return true // IPv6 unique-local
+  if (addr.startsWith('::ffff:')) return isPrivateIp(addr.slice(7)) // IPv4-mapped IPv6
+  return false
+}
+
+async function assertPublicHttpUrl(rawUrl) {
+  const blocked = code => { const e = new Error('This URL is not allowed.'); e.code = code || 'SSRF_BLOCKED'; return e }
+  let u
+  try { u = new URL(String(rawUrl)) } catch { throw blocked('SSRF_INVALID_URL') }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw blocked('SSRF_BAD_SCHEME')
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  if (/^(localhost|.*\.local|.*\.internal|metadata\.google\.internal)$/i.test(host)) throw blocked('SSRF_BLOCKED_HOST')
+  if (net.isIP(host)) {
+    if (isPrivateIp(host)) throw blocked('SSRF_PRIVATE_IP')
+    return u
+  }
+  let addrs
+  try { addrs = await dns.promises.lookup(host, { all: true }) } catch { throw blocked('SSRF_DNS_FAILED') }
+  if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) throw blocked('SSRF_PRIVATE_IP')
+  return u
+}
+
+// Fetch that follows redirects manually, re-validating each hop against assertPublicHttpUrl
+// so a public URL can't 30x-redirect into an internal address.
+async function fetchNoSsrf(url, options = {}, timeoutMs = 9000, maxRedirects = 4) {
+  let current = url
+  for (let i = 0; i <= maxRedirects; i++) {
+    await assertPublicHttpUrl(current)
+    const res = await fetchWithTimeout(current, { ...options, redirect: 'manual' }, timeoutMs)
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      current = new URL(res.headers.get('location'), current).toString()
+      continue
+    }
+    return res
+  }
+  const err = new Error('Too many redirects.')
+  err.code = 'SSRF_TOO_MANY_REDIRECTS'
+  throw err
+}
+
 function buildJinaTargets(url) {
   const clean = String(url || '').trim()
   const withoutScheme = clean.replace(/^https?:\/\//i, '')
@@ -221,7 +280,7 @@ async function fetchDirectHtml(url) {
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8'
   }
-  const res = await fetchWithTimeout(url, { headers, redirect: 'follow' }, 9000)
+  const res = await fetchNoSsrf(url, { headers }, 9000)
   if (!res.ok) {
     const err = new Error(`Direct extraction failed with HTTP ${res.status}`)
     err.code = 'DIRECT_FETCH_FAILED'
@@ -300,6 +359,18 @@ async function fetchLinkedInGuest(jobId) {
 
 async function fetchJobText(url) {
   const attempts = []
+
+  // SSRF guard: reject non-public URLs up front so an internal/metadata address is never
+  // fetched server-side (directly, via the LinkedIn guest path, or handed to Jina).
+  try {
+    await assertPublicHttpUrl(url)
+  } catch (error) {
+    const err = new Error('This job URL could not be used. Please paste the job description instead.')
+    err.statusCode = 400
+    err.code = 'URL_BLOCKED'
+    err.extractionAttempts = [{ provider: 'url-validation', code: error?.code || 'SSRF_BLOCKED' }]
+    throw err
+  }
 
   // LinkedIn /jobs/view/ pages are gated behind a login/anti-bot wall, so generic
   // extraction returns the wall instead of the posting. LinkedIn does expose a public
