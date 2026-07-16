@@ -2,6 +2,10 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
+// Sonnet generation up to ~3200 tokens can exceed Vercel's default 10s timeout and 504
+// (a killed request still costs tokens). Give the function the full budget.
+export const config = { maxDuration: 60 }
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const PLAN_LIMITS = {

@@ -39,11 +39,11 @@ function safeScore(value, fallback = 0) {
   return Math.max(0, Math.min(100, Math.round(n)))
 }
 
-function scoreLabel(score, verdict) {
+function scoreLabel(score, verdict, t) {
   if (verdict) return String(verdict).replace(/_/g, ' ').toUpperCase()
-  if (score >= 75) return 'LIKELY PASSED'
-  if (score >= 55) return 'BORDERLINE'
-  return 'NEEDS WORK'
+  if (score >= 75) return t('rv_verdict_likely_passed', 'LIKELY PASSED')
+  if (score >= 55) return t('rv_verdict_borderline', 'BORDERLINE')
+  return t('rv_verdict_needs_work', 'NEEDS WORK')
 }
 
 function formatDate(value) {
@@ -72,10 +72,11 @@ function Tag({ label, type = 'found' }) {
 }
 
 function InfoPill({ label, value }) {
+  const { t } = useLang()
   return (
     <div style={{ border: `1px solid ${premium.line}`, borderRadius: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.52)', minHeight: 50 }}>
       <p style={{ margin: '0 0 6px', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: premium.copper, fontWeight: 950 }}>{label}</p>
-      <strong style={{ display: 'block', color: premium.navy, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || 'Not stated'}</strong>
+      <strong style={{ display: 'block', color: premium.navy, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || t('rv_not_stated', 'Not stated')}</strong>
     </div>
   )
 }
@@ -104,11 +105,12 @@ function SummaryCard({ title, children }) {
 }
 
 function ScoreMathCard({ breakdown, penalty, explanation, total }) {
+  const { t } = useLang()
   if (!Array.isArray(breakdown) || !breakdown.length) return null
   const score = safeScore(total, 0)
   return (
     <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: 'rgba(255,255,255,0.5)', marginTop: 14 }}>
-      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>How this score is calculated</h3>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>{t('rv_score_calc_title', 'How this score is calculated')}</h3>
       {explanation && <p style={{ margin: '0 0 12px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>{explanation}</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {breakdown.map(factor => {
@@ -131,11 +133,11 @@ function ScoreMathCard({ breakdown, penalty, explanation, total }) {
       </div>
       {penalty > 0 && (
         <p style={{ margin: '10px 0 0', color: premium.red, fontSize: 12 }}>
-          − {penalty} pts penalty for missing several critical skills
+          − {penalty} {t('rv_score_penalty_suffix', 'pts penalty for missing several critical skills')}
         </p>
       )}
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${premium.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: premium.navy, fontSize: 13, fontWeight: 950 }}>Final ATS score</span>
+        <span style={{ color: premium.navy, fontSize: 13, fontWeight: 950 }}>{t('rv_final_ats_score', 'Final ATS score')}</span>
         <strong style={{ color: scoreTone(score), fontSize: 18 }}>{score}%</strong>
       </div>
     </section>
@@ -143,23 +145,24 @@ function ScoreMathCard({ breakdown, penalty, explanation, total }) {
 }
 
 function RequirementsCoverageCard({ items, proofGaps }) {
+  const { t } = useLang()
   const rows = (Array.isArray(items) ? items : [])
     .filter(r => r && typeof r === 'object' && String(r.requirement || '').trim())
     .slice(0, 10)
   if (!rows.length) return null
 
   const meta = {
-    met: { label: 'Met', color: premium.green, bg: 'rgba(85,124,100,0.10)' },
-    partial: { label: 'Partial', color: premium.gold, bg: 'rgba(185,134,59,0.12)' },
-    missing: { label: 'Missing', color: premium.red, bg: 'rgba(184,92,85,0.10)' }
+    met: { label: t('rv_status_met', 'Met'), color: premium.green, bg: 'rgba(85,124,100,0.10)' },
+    partial: { label: t('rv_status_partial', 'Partial'), color: premium.gold, bg: 'rgba(185,134,59,0.12)' },
+    missing: { label: t('rv_status_missing', 'Missing'), color: premium.red, bg: 'rgba(184,92,85,0.10)' }
   }
   const proof = (Array.isArray(proofGaps) ? proofGaps : []).map(p => String(p || '').trim()).filter(Boolean).slice(0, 4)
 
   return (
     <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: premium.paper, marginTop: 14 }}>
-      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>Requirements coverage</h3>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>{t('rv_req_coverage_title', 'Requirements coverage')}</h3>
       <p style={{ margin: '0 0 12px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>
-        Each key requirement from the job, whether your CV shows it, and a truthful way to strengthen it — never claim what you haven't done.
+        {t('rv_req_coverage_desc', "Each key requirement from the job, whether your CV shows it, and a truthful way to strengthen it — never claim what you haven't done.")}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {rows.map((r, i) => {
@@ -172,8 +175,8 @@ function RequirementsCoverageCard({ items, proofGaps }) {
                 <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', color: m.color, background: m.bg, border: `1px solid ${m.color}40`, borderRadius: 999, padding: '3px 9px', marginTop: 1 }}>{m.label}</span>
                 <div style={{ minWidth: 0 }}>
                   <p style={{ margin: 0, color: premium.navy, fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{r.requirement}</p>
-                  {evidence && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.green }}>Your evidence:</strong> {evidence}</p>}
-                  {suggestion && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.copper }}>How to strengthen:</strong> {suggestion}</p>}
+                  {evidence && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.green }}>{t('rv_your_evidence', 'Your evidence:')}</strong> {evidence}</p>}
+                  {suggestion && <p style={{ margin: '3px 0 0', color: premium.muted, fontSize: 12, lineHeight: 1.5 }}><strong style={{ color: premium.copper }}>{t('rv_how_to_strengthen', 'How to strengthen:')}</strong> {suggestion}</p>}
                 </div>
               </div>
             </div>
@@ -182,7 +185,7 @@ function RequirementsCoverageCard({ items, proofGaps }) {
       </div>
       {proof.length > 0 && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${premium.line}` }}>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 850, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.copper }}>Proof to add</p>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 850, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.copper }}>{t('rv_proof_to_add', 'Proof to add')}</p>
           <ul style={{ margin: 0, paddingLeft: 18, color: premium.muted, fontSize: 12, lineHeight: 1.6 }}>
             {proof.map((p, i) => <li key={`proof-${i}`}>{p}</li>)}
           </ul>
@@ -193,6 +196,7 @@ function RequirementsCoverageCard({ items, proofGaps }) {
 }
 
 function ImprovementPlanCard({ plan }) {
+  const { t } = useLang()
   if (!plan || !Array.isArray(plan.addressable_skills) || !plan.addressable_skills.length) return null
   const current = safeScore(plan.current_score, 0)
   const considered = plan.to_considered
@@ -203,7 +207,7 @@ function ImprovementPlanCard({ plan }) {
     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderTop: `1px solid ${premium.line}` }}>
       <div style={{ width: 52, flexShrink: 0, textAlign: 'center' }}>
         <strong style={{ color: tone, fontSize: 18 }}>{target}</strong>
-        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.muted }}>target</div>
+        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.muted }}>{t('rv_plan_target', 'target')}</div>
       </div>
       <div style={{ minWidth: 0 }}>
         <p style={{ margin: '0 0 3px', color: premium.navy, fontSize: 13, fontWeight: 800 }}>{label}</p>
@@ -216,39 +220,39 @@ function ImprovementPlanCard({ plan }) {
 
   return (
     <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 18, background: premium.copperSoft, marginTop: 14 }}>
-      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>Your path to an interview</h3>
+      <h3 style={{ margin: '0 0 4px', color: premium.navy, fontSize: 15, fontWeight: 950 }}>{t('rv_plan_title', 'Your path to an interview')}</h3>
       <p style={{ margin: '0 0 6px', color: premium.muted, fontSize: 12.5, lineHeight: 1.55 }}>
-        You're at <strong style={{ color: premium.navy }}>{current}%</strong> today. Here's what evidencing more of the role's skills on your CV would do to your score — using the same scoring engine, so these projections are real.
+        {t('rv_plan_desc_pre', "You're at ")}<strong style={{ color: premium.navy }}>{current}%</strong>{t('rv_plan_desc_post', " today. Here's what evidencing more of the role's skills on your CV would do to your score — using the same scoring engine, so these projections are real.")}
       </p>
 
       {considered && considered.reachable && (
         <Step tone={premium.gold} target={`${considered.projected_score}%`}
-          label={`Get considered — evidence ${considered.skills_needed} skill${considered.skills_needed > 1 ? 's' : ''}`}
-          info="Crosses the threshold where an ATS/recruiter is likely to keep reading rather than auto-filter." />
+          label={`${t('rv_plan_considered_label', 'Get considered — evidence')} ${considered.skills_needed} ${considered.skills_needed > 1 ? t('rv_skills', 'skills') : t('rv_skill', 'skill')}`}
+          info={t('rv_plan_considered_info', 'Crosses the threshold where an ATS/recruiter is likely to keep reading rather than auto-filter.')} />
       )}
       {interview && interview.reachable && (
         <Step tone={premium.green} target={`${interview.projected_score}%`}
-          label={`Become interview-likely — evidence ${interview.skills_needed} skill${interview.skills_needed > 1 ? 's' : ''}`}
-          info="Comfortably clears the filter for most ATS-screened roles." />
+          label={`${t('rv_plan_interview_label', 'Become interview-likely — evidence')} ${interview.skills_needed} ${interview.skills_needed > 1 ? t('rv_skills', 'skills') : t('rv_skill', 'skill')}`}
+          info={t('rv_plan_interview_info', 'Comfortably clears the filter for most ATS-screened roles.')} />
       )}
       {interview && !interview.reachable && (
         <Step tone={premium.red} target={`~${interview.projected_score}%`}
-          label="Skills alone won't reach interview-likely"
-          info="Even evidencing every missing skill caps out below the interview bar — the remaining gap is depth of experience or seniority for this role, not keywords." />
+          label={t('rv_plan_unreachable_label', "Skills alone won't reach interview-likely")}
+          info={t('rv_plan_unreachable_info', 'Even evidencing every missing skill caps out below the interview bar — the remaining gap is depth of experience or seniority for this role, not keywords.')} />
       )}
       {alreadyInterview && (
         <Step tone={premium.green} target={`${current}%`}
-          label="You're already interview-likely"
-          info="Your score clears the typical ATS filter. Focus on tailoring and interview prep rather than the score." />
+          label={t('rv_plan_already_label', "You're already interview-likely")}
+          info={t('rv_plan_already_info', 'Your score clears the typical ATS filter. Focus on tailoring and interview prep rather than the score.')} />
       )}
 
       <div style={{ marginTop: 12 }}>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 850, letterSpacing: '0.05em', textTransform: 'uppercase', color: premium.copper }}>
-          Skills to evidence (only if you genuinely have them)
+          {t('rv_plan_skills_to_evidence', 'Skills to evidence (only if you genuinely have them)')}
         </p>
         <div>{skillList(plan.addressable_skills.slice(0, 10))}</div>
         <p style={{ margin: '8px 0 0', fontSize: 11.5, color: premium.muted, lineHeight: 1.5, fontStyle: 'italic' }}>
-          Add concrete proof — projects, results, tools used — for any of these you've actually done. Never claim skills you don't have; recruiters verify in interviews.
+          {t('rv_plan_skills_note', "Add concrete proof — projects, results, tools used — for any of these you've actually done. Never claim skills you don't have; recruiters verify in interviews.")}
         </p>
       </div>
     </section>
@@ -274,6 +278,7 @@ function ScoreBreakdownCard({ label, score, helper, color }) {
 }
 
 function LanguageMismatchBanner({ languageCheck, onReset }) {
+  const { t } = useLang()
   if (!languageCheck?.mismatch) return null
   const jobLabel = languageCheck.job?.label
   const cvLabel = languageCheck.cv?.label
@@ -283,9 +288,9 @@ function LanguageMismatchBanner({ languageCheck, onReset }) {
     <div style={{ background: 'rgba(185,134,59,0.08)', border: '1px solid rgba(185,134,59,0.22)', borderRadius: 18, padding: '14px 16px', marginBottom: 12, display: 'flex', gap: 10 }}>
       <span style={{ color: premium.gold, flexShrink: 0 }}>⚠</span>
       <div>
-        <p style={{ fontSize: 10, fontWeight: 900, color: premium.gold, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 6 }}>Language mismatch detected</p>
+        <p style={{ fontSize: 10, fontWeight: 900, color: premium.gold, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 6 }}>{t('rv_lang_mismatch_title', 'Language mismatch detected')}</p>
         <p style={{ fontSize: 12, color: premium.muted, lineHeight: 1.5, margin: 0 }}>
-          This job offer looks like it's written in {jobLabel}, but your CV looks like it's in {cvLabel}. Keyword matching is language-sensitive, so this score may be less accurate. For a more reliable result, re-run the analysis with a {jobLabel} version of your CV.
+          {t('rv_lang_mismatch_p1', "This job offer looks like it's written in ")}{jobLabel}{t('rv_lang_mismatch_p2', ", but your CV looks like it's in ")}{cvLabel}{t('rv_lang_mismatch_p3', '. Keyword matching is language-sensitive, so this score may be less accurate. For a more reliable result, re-run the analysis with a ')}{jobLabel}{t('rv_lang_mismatch_p4', ' version of your CV.')}
         </p>
         {onReset && (
           <button
@@ -297,7 +302,7 @@ function LanguageMismatchBanner({ languageCheck, onReset }) {
               color: premium.gold, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.02em'
             }}
           >
-            Analyze with a {jobLabel} CV →
+            {t('rv_analyze_with_cv_pre', 'Analyze with a ')}{jobLabel}{t('rv_analyze_with_cv_suf', ' CV →')}
           </button>
         )}
       </div>
@@ -306,6 +311,7 @@ function LanguageMismatchBanner({ languageCheck, onReset }) {
 }
 
 function JobDetailsCard({ data }) {
+  const { t } = useLang()
   const sections = data.job_sections || {}
   const context = data.job_context || {}
   const hiringContact = context.hiring_contact && !['null', 'not mentioned', 'not stated', 'n/a'].includes(String(context.hiring_contact).toLowerCase().trim()) ? context.hiring_contact : null
@@ -320,19 +326,19 @@ function JobDetailsCard({ data }) {
 
   return (
     <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: '18px 20px', background: premium.paper, marginBottom: 16 }}>
-      <p style={{ margin: '0 0 14px', fontSize: 10, fontWeight: 950, letterSpacing: '0.12em', textTransform: 'uppercase', color: premium.copper }}>About this role</p>
+      <p style={{ margin: '0 0 14px', fontSize: 10, fontWeight: 950, letterSpacing: '0.12em', textTransform: 'uppercase', color: premium.copper }}>{t('rv_about_this_role', 'About this role')}</p>
       {(hiringContact || experienceRequired) && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: aboutCompany || aboutRole || responsibilities.length || requirements.length ? 14 : 0 }}>
-          {hiringContact && <InfoPill label="Hiring contact" value={hiringContact} />}
-          {experienceRequired && <InfoPill label="Experience required" value={experienceRequired} />}
+          {hiringContact && <InfoPill label={t('rv_hiring_contact', 'Hiring contact')} value={hiringContact} />}
+          {experienceRequired && <InfoPill label={t('rv_experience_required', 'Experience required')} value={experienceRequired} />}
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {aboutCompany && <SummaryCard title="About the company"><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutCompany}</p></SummaryCard>}
-        {aboutRole && <SummaryCard title="The role"><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutRole}</p></SummaryCard>}
-        {responsibilities.length > 0 && <SummaryCard title="Key responsibilities"><BulletList items={responsibilities} tone="good" empty="" max={4} /></SummaryCard>}
-        {requirements.length > 0 && <SummaryCard title="Key requirements"><BulletList items={requirements} tone="good" empty="" max={4} /></SummaryCard>}
-        {benefits && <SummaryCard title="Benefits"><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{benefits}</p></SummaryCard>}
+        {aboutCompany && <SummaryCard title={t('rv_about_company', 'About the company')}><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutCompany}</p></SummaryCard>}
+        {aboutRole && <SummaryCard title={t('rv_the_role', 'The role')}><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutRole}</p></SummaryCard>}
+        {responsibilities.length > 0 && <SummaryCard title={t('rv_key_responsibilities', 'Key responsibilities')}><BulletList items={responsibilities} tone="good" empty="" max={4} /></SummaryCard>}
+        {requirements.length > 0 && <SummaryCard title={t('rv_key_requirements', 'Key requirements')}><BulletList items={requirements} tone="good" empty="" max={4} /></SummaryCard>}
+        {benefits && <SummaryCard title={t('rv_benefits', 'Benefits')}><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{benefits}</p></SummaryCard>}
       </div>
     </section>
   )
@@ -357,7 +363,7 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
   const company = context.company && !['Not specified', 'Not stated'].includes(context.company) ? context.company : null
   const analyzedAt = formatDate(savedRow?.created_at || data.created_at)
   const subtitle = [company, analyzedAt].filter(Boolean).join(' · ')
-  const summary = context.job_summary || data.job_summary || data.match_reasoning || recruiter.reason || 'Joblytics analyzed the job description against the current CV and extracted the strongest ATS signals.'
+  const summary = context.job_summary || data.job_summary || data.match_reasoning || recruiter.reason || t('rv_summary_fallback', 'Joblytics analyzed the job description against the current CV and extracted the strongest ATS signals.')
 
   const confidenceLevel = String(data.confidence?.level || '').toLowerCase()
   const confidence = ['high', 'medium', 'low'].includes(confidenceLevel)
@@ -372,9 +378,9 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
   const gaps = cleanLabels(unique([...(data.gaps_to_address || []), ...(data.critical_gaps || []), ...(cleanReq.requirements_missing || []), ...(strictAnalysis.needs_proof || [])], 8)).slice(0, 6)
   const met = cleanLabels(unique([...(cleanReq.requirements_met || []), ...(req.met || []), ...strictMatched.map(item => item.required_skill)], 8)).slice(0, 6)
   const unmet = cleanLabels(unique([...(cleanReq.requirements_missing || []), ...(req.unmet || []), ...(strictAnalysis.missing_skills || [])], 8)).slice(0, 6)
-  const salaryText = context.salary || context.salary_range || data.salary_assessment?.assessment || 'Not stated'
-  const statusText = savedRow ? 'Saved' : 'Ready to save'
-  const recruiterSummary = data.recruiter_screening_summary || recruiter.reason || data.overall_reason || 'Use this result to decide what to fix before applying.'
+  const salaryText = context.salary || context.salary_range || data.salary_assessment?.assessment || t('rv_not_stated', 'Not stated')
+  const statusText = savedRow ? t('rv_status_saved', 'Saved') : t('rv_status_ready', 'Ready to save')
+  const recruiterSummary = data.recruiter_screening_summary || recruiter.reason || data.overall_reason || t('rv_recruiter_summary_fallback', 'Use this result to decide what to fix before applying.')
 
   const keywordScore = safeScore(keyword.score, foundKeywords.length || missingKeywords.length ? Math.round((foundKeywords.length / Math.max(1, foundKeywords.length + missingKeywords.length)) * 100) : score)
   const experienceScore = safeScore(req.score ?? data.experience_depth?.score, score)
@@ -404,47 +410,47 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
         <div style={{ width: 108, height: 108, borderRadius: '50%', border: `9px solid ${tone}`, background: score >= 75 ? 'rgba(85,124,100,0.10)' : score >= 55 ? 'rgba(185,134,59,0.10)' : 'rgba(184,92,85,0.10)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <div style={{ textAlign: 'center' }}>
             <strong style={{ display: 'block', fontFamily: 'Georgia, Newsreader, serif', color: tone, fontSize: 31, lineHeight: 1 }}>{score}%</strong>
-            <span style={{ display: 'block', marginTop: 5, color: tone, fontSize: 9, fontWeight: 950, letterSpacing: '0.07em' }}>{scoreLabel(score, data.overall_verdict)}</span>
+            <span style={{ display: 'block', marginTop: 5, color: tone, fontSize: 9, fontWeight: 950, letterSpacing: '0.07em' }}>{scoreLabel(score, data.overall_verdict, t)}</span>
           </div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginTop: 18 }}>
-        <ScoreBreakdownCard label="Keywords" score={keywordScore} helper={`${foundKeywords.length} found · ${missingKeywords.length} missing`} color={premium.gold} />
-        <ScoreBreakdownCard label="Experience" score={experienceScore} helper="Relevant experience evidence" color={premium.green} />
-        <ScoreBreakdownCard label="Semantic fit" score={semanticScore} helper="Role/responsibility alignment" color={premium.blue} />
-        <ScoreBreakdownCard label="Seniority" score={seniorityScore} helper="Level and scope alignment" color={premium.purple} />
-        <ScoreBreakdownCard label="Recruiter" score={recruiterScore} helper="Shortlist probability signal" color={tone} />
+        <ScoreBreakdownCard label={t('rv_sb_keywords', 'Keywords')} score={keywordScore} helper={`${foundKeywords.length} ${t('rv_found_word', 'found')} · ${missingKeywords.length} ${t('rv_missing_word', 'missing')}`} color={premium.gold} />
+        <ScoreBreakdownCard label={t('rv_sb_experience', 'Experience')} score={experienceScore} helper={t('rv_sb_experience_helper', 'Relevant experience evidence')} color={premium.green} />
+        <ScoreBreakdownCard label={t('rv_sb_semantic', 'Semantic fit')} score={semanticScore} helper={t('rv_sb_semantic_helper', 'Role/responsibility alignment')} color={premium.blue} />
+        <ScoreBreakdownCard label={t('rv_sb_seniority', 'Seniority')} score={seniorityScore} helper={t('rv_sb_seniority_helper', 'Level and scope alignment')} color={premium.purple} />
+        <ScoreBreakdownCard label={t('rv_sb_recruiter', 'Recruiter')} score={recruiterScore} helper={t('rv_sb_recruiter_helper', 'Shortlist probability signal')} color={tone} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 18 }}>
         <div style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: 'rgba(255,255,255,0.50)' }}>
           <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.7 }}>{summary}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginTop: 14 }}>
-            <InfoPill label="Work mode" value={context.work_mode || 'Not stated'} />
-            <InfoPill label="Contract" value={context.contract_type || 'Not stated'} />
-            <InfoPill label="Salary" value={salaryText} />
-            <InfoPill label="Status" value={statusText} />
+            <InfoPill label={t('work_mode', 'Work mode')} value={context.work_mode || t('rv_not_stated', 'Not stated')} />
+            <InfoPill label={t('contract', 'Contract')} value={context.contract_type || t('rv_not_stated', 'Not stated')} />
+            <InfoPill label={t('salary', 'Salary')} value={salaryText} />
+            <InfoPill label={t('rv_status', 'Status')} value={statusText} />
           </div>
           <div style={{ marginTop: 12, padding: '13px 14px', borderRadius: 14, border: '1px solid rgba(181,102,60,0.20)', background: premium.copperSoft }}>
-            <strong style={{ display: 'block', color: premium.navy, fontSize: 12, marginBottom: 5 }}>Recruiter screening summary</strong>
+            <strong style={{ display: 'block', color: premium.navy, fontSize: 12, marginBottom: 5 }}>{t('rv_recruiter_screening_summary', 'Recruiter screening summary')}</strong>
             <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.5 }}>{recruiterSummary}</p>
           </div>
         </div>
 
         <div style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: 'rgba(255,255,255,0.50)' }}>
-          <h3 style={{ margin: '0 0 14px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>Missing keywords</h3>
-          <div style={{ minHeight: 42 }}>{missingKeywords.length ? missingKeywords.map(k => <Tag key={`missing-${k}`} label={k} type="missing" />) : <p style={{ margin: 0, color: premium.green, fontSize: 12 }}>No critical missing keywords detected.</p>}</div>
-          <h3 style={{ margin: '18px 0 10px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>Found in CV</h3>
-          <div>{foundKeywords.length ? foundKeywords.map(k => <Tag key={`found-${k}`} label={k} type="found" />) : <p style={{ margin: 0, color: premium.muted, fontSize: 12 }}>No strong keyword evidence returned.</p>}</div>
+          <h3 style={{ margin: '0 0 14px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('missing_keywords', 'Missing keywords')}</h3>
+          <div style={{ minHeight: 42 }}>{missingKeywords.length ? missingKeywords.map(k => <Tag key={`missing-${k}`} label={k} type="missing" />) : <p style={{ margin: 0, color: premium.green, fontSize: 12 }}>{t('rv_no_missing_keywords', 'No critical missing keywords detected.')}</p>}</div>
+          <h3 style={{ margin: '18px 0 10px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('rv_found_in_cv', 'Found in CV')}</h3>
+          <div>{foundKeywords.length ? foundKeywords.map(k => <Tag key={`found-${k}`} label={k} type="found" />) : <p style={{ margin: 0, color: premium.muted, fontSize: 12 }}>{t('rv_no_keyword_evidence', 'No strong keyword evidence returned.')}</p>}</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginTop: 14 }}>
-        <SummaryCard title="Quick wins"><BulletList items={quickWins} tone="good" empty="No quick wins returned." max={4} /></SummaryCard>
-        <SummaryCard title="Gaps to address"><BulletList items={gaps} tone="bad" empty="No priority gaps detected." max={4} /></SummaryCard>
-        <SummaryCard title="Requirements met"><BulletList items={met} tone="good" empty="No met requirements returned." max={5} /></SummaryCard>
-        <SummaryCard title="Requirements missing"><BulletList items={unmet} tone="bad" empty="No missing requirements detected." max={5} /></SummaryCard>
+        <SummaryCard title={t('rv_quick_wins', 'Quick wins')}><BulletList items={quickWins} tone="good" empty={t('rv_no_quick_wins', 'No quick wins returned.')} max={4} /></SummaryCard>
+        <SummaryCard title={t('rv_gaps_to_address', 'Gaps to address')}><BulletList items={gaps} tone="bad" empty={t('rv_no_gaps', 'No priority gaps detected.')} max={4} /></SummaryCard>
+        <SummaryCard title={t('rv_requirements_met', 'Requirements met')}><BulletList items={met} tone="good" empty={t('rv_no_met', 'No met requirements returned.')} max={5} /></SummaryCard>
+        <SummaryCard title={t('rv_requirements_missing', 'Requirements missing')}><BulletList items={unmet} tone="bad" empty={t('rv_no_unmet', 'No missing requirements detected.')} max={5} /></SummaryCard>
       </div>
 
       <ScoreMathCard breakdown={data.score_breakdown} penalty={data.score_penalty} explanation={data.score_explanation} total={data.display_score} />
