@@ -39,7 +39,6 @@ const LegalNoticePage = lazyWithReload(() => import('./pages/LegalNoticePage'))
 const ContactPage = lazyWithReload(() => import('./pages/ContactPage'))
 const MessagesPage = lazyWithReload(() => import('./pages/MessagesPage'))
 const CvCoachPage = lazyWithReload(() => import('./pages/CvCoachPage'))
-const CvBuilderPage = lazyWithReload(() => import('./pages/CvBuilderPage'))
 const ProfileOptimizerPage = lazyWithReload(() => import('./pages/ProfileOptimizerPage'))
 const BillingPage = lazyWithReload(() => import('./pages/BillingPage'))
 const AnalyzerPage = lazyWithReload(() => import('./pages/AnalyzerPage'))
@@ -55,7 +54,6 @@ const PAGE_TO_PATH = {
   billing: '/billing',
   messages: '/messages',
   contact: '/contact',
-  'cv-builder': '/cv-builder',
   'sync-settings': '/sync-settings',
   'career-intelligence': '/career-intelligence'
 }
@@ -187,7 +185,7 @@ export default function App() {
     switch (page) {
       case 'dashboard': return <CareerDashboardPage setPage={setPage} onOpenAnalysis={a => selectAndGo(a, 'analyzer')} />
       case 'analyzer': return <AnalyzerPage setPage={setPage} prefillAnalysis={selectedAnalysis} onClearPrefill={() => setSelectedAnalysis(null)} />
-      case 'history': return <Dashboard onNewAnalysis={() => { setSelectedAnalysis(null); setPage('analyzer') }} onSelectAnalysis={a => selectAndGo(a, 'analyzer')} onBuildCv={a => selectAndGo(a, 'cv-builder')} onGenerateMessage={a => selectAndGo(a, 'coach')} />
+      case 'history': return <Dashboard onNewAnalysis={() => { setSelectedAnalysis(null); setPage('analyzer') }} onSelectAnalysis={a => selectAndGo(a, 'analyzer')} onBuildCv={a => selectAndGo(a, 'coach')} onGenerateMessage={a => selectAndGo(a, 'coach')} />
       case 'coach': return <CvCoachPage selectedAnalysis={selectedAnalysis} setPage={setPage} />
       case 'profile': return <ProfileOptimizerPage />
       case 'billing': return <BillingPage />
@@ -195,7 +193,6 @@ export default function App() {
       case 'sync-settings': return <SmartSyncSettingsPage setPage={setPage} />
       case 'career-intelligence': return <CareerIntelligencePage />
       case 'contact': return <ContactPage onBack={() => setPage('dashboard')} />
-      case 'cv-builder': return <CvBuilderPage selectedAnalysis={selectedAnalysis} />
       default: return <CareerDashboardPage setPage={setPage} onOpenAnalysis={a => selectAndGo(a, 'analyzer')} />
     }
   }

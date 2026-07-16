@@ -5,7 +5,6 @@ import SeniorityCard from './SeniorityCard'
 import SmartApplyBtn from './SmartApplyBtn'
 import InterviewPrepCard from './InterviewPrepCard'
 import CvCoachPreview from './CvCoachPreview'
-import CvBuilderCard from './CvBuilderCard'
 import StatusPill from './StatusPill'
 import WaitlistBanner from './WaitlistBanner'
 import { useLang } from '../context/LangContext'
@@ -499,7 +498,6 @@ export default function ResultsView({ data, savedRow: serverSavedRow, rateLimit,
   }, [serverSavedRow, analysisRow])
 
   const handleStatusUpdate = updated => setAnalysisRow(updated)
-  const selectedForRebuilder = analysisRow?.result ? analysisRow : { ...(analysisRow || {}), result: data, score, id: analysisRow?.id || data.id || 'current-analysis' }
 
   return (
     <div style={{ animation: 'fadeUp 0.5s ease' }}>
@@ -521,10 +519,6 @@ export default function ResultsView({ data, savedRow: serverSavedRow, rateLimit,
       <SalaryInsightCard data={data} />
       <SeniorityCard seniority={data.seniority} />
       <InterviewPrepCard prep={data.interview_prep} score={score} />
-
-      <div style={{ marginTop: 18, marginBottom: 18 }}>
-        <CvBuilderCard selected={selectedForRebuilder} />
-      </div>
 
       {onGoCoach && <CvCoachPreview data={data} onGoCoach={onGoCoach} />}
 
