@@ -175,6 +175,25 @@ async function getAnthropicClient() {
   return new Anthropic({ apiKey })
 }
 
+// Verify the caller's Supabase session. This endpoint drives expensive Anthropic calls, so
+// it must not be usable anonymously (otherwise it's a free, unbounded LLM proxy on our bill).
+async function getUserFromRequest(req) {
+  const header = req.headers?.authorization || req.headers?.Authorization || ''
+  const token = typeof header === 'string' ? (header.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || null) : null
+  if (!token) return null
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const sb = createClient(url, key, { auth: { persistSession: false } })
+    const { data, error } = await sb.auth.getUser(token)
+    return error ? null : data?.user || null
+  } catch {
+    return null
+  }
+}
+
 function stripCodeFence(raw) {
   return String(raw || '')
     .trim()
@@ -666,6 +685,11 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(204).end?.()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Auth gate: every POST path below calls Anthropic. Require a valid signed-in user.
+  const user = await getUserFromRequest(req)
+  if (!user) return res.status(401).json({ success: false, error: 'Please sign in to use the LinkedIn optimizer.' })
+
   if (parseBody(req).type === 'extract-pdf') return handlePdfExtract(req, res)
 
   try {

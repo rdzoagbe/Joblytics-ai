@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLang } from '../context/LangContext'
 import LinkedInOAuthButton from '../components/LinkedInOAuthButton'
+import { supabase } from '../lib/supabase'
 
 function isLinkedInProfileUrl(value) {
   if (!value) return false
@@ -162,9 +163,10 @@ export default function LinkedInOptimizerPage() {
           ? { headline, about, experience, skills, targetRole, lang }
           : { profileUrl: profileUrl.trim(), targetRole, lang }
 
+      const token = (await supabase.auth.getSession()).data?.session?.access_token
       const response = await fetch('/api/linkedin-optimize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body)
       })
 
@@ -239,9 +241,10 @@ export default function LinkedInOptimizerPage() {
       }
 
       const base64 = await fileToBase64(file)
+      const token = (await supabase.auth.getSession()).data?.session?.access_token
       const response = await fetch('/api/linkedin-optimize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ type: 'extract-pdf', fileBase64: base64, fileName: file.name })
       })
       const data = await response.json().catch(() => ({}))
