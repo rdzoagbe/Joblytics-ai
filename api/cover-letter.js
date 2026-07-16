@@ -3,6 +3,10 @@ import pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 import { createClient } from '@supabase/supabase-js'
 
+// Cover-letter and CV-optimize use Sonnet with up to 3500 tokens; the default 10s Vercel
+// timeout can 504 on a slow generation. Give the function the full budget.
+export const config = { maxDuration: 60 }
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function getSupabaseClient() {

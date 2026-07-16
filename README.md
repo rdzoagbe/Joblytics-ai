@@ -19,8 +19,8 @@ npm install
 # 2. Create your local env file
 cp .env.example .env.local
 
-# 3. Add your Anthropic API key to .env.local
-# VITE_ANTHROPIC_API_KEY=sk-ant-...
+# 3. Add your Anthropic API key to .env.local (server-only — do NOT use a VITE_ prefix)
+# ANTHROPIC_API_KEY=sk-ant-...
 
 # 4. Run dev server
 npm run dev
@@ -48,7 +48,7 @@ git push -u origin main
 
 ### Step 3 — Add environment variable
 1. In your Railway project → **Variables** tab
-2. Add: `VITE_ANTHROPIC_API_KEY` = your Anthropic API key
+2. Add: `ANTHROPIC_API_KEY` = your Anthropic API key (server-only; never `VITE_`-prefixed)
 3. Railway will automatically rebuild and redeploy
 
 ### Step 4 — Get your URL
