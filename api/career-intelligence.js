@@ -122,14 +122,23 @@ function normalizePlan(value) {
   return 'free'
 }
 
-function resolveUserPlan(user) {
+// Entitlement is read from the server-only `subscriptions` table (written exclusively by
+// the Stripe webhook). We do NOT trust user_metadata/app_metadata here: user_metadata is
+// editable by the user themselves, so trusting it let anyone self-grant Pro.
+async function resolveUserPlan(supabase, user) {
   const adminIds = (process.env.RATE_LIMIT_WHITELIST || process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean)
   if (adminIds.includes(user?.id)) return PLAN_LIMITS.pro
-  const meta = { ...(user?.user_metadata || {}), ...(user?.app_metadata || {}) }
-  const status = String(meta.subscription_status || meta.stripe_subscription_status || '').toLowerCase()
-  const rawPlan = meta.subscription_plan || meta.plan || meta.price_plan || meta.product_plan || meta.tier
-  const planId = normalizePlan(rawPlan)
-  if (planId !== 'free' && (!status || ['active', 'trialing', 'paid'].includes(status))) return PLAN_LIMITS[planId]
+  if (!supabase || !user?.id) return PLAN_LIMITS.free
+  try {
+    const { data } = await supabase.from('subscriptions').select('plan, status, current_period_end').eq('user_id', user.id).maybeSingle()
+    if (!data) return PLAN_LIMITS.free
+    const status = String(data.status || '').toLowerCase()
+    const planId = normalizePlan(data.plan)
+    const notExpired = !data.current_period_end || new Date(data.current_period_end).getTime() > Date.now()
+    if (planId !== 'free' && ['active', 'trialing', 'paid'].includes(status) && notExpired) return PLAN_LIMITS[planId]
+  } catch (e) {
+    console.error('resolveUserPlan lookup failed:', e?.message)
+  }
   return PLAN_LIMITS.free
 }
 
@@ -153,7 +162,7 @@ function getRequestIdentity(req) {
 }
 
 async function checkUsageLimit({ supabase, req, user, eventType }) {
-  const plan = resolveUserPlan(user)
+  const plan = await resolveUserPlan(supabase, user)
   const limit = plan.monthly[eventType] ?? 0
   const identity = getRequestIdentity(req)
   const since = startOfMonthIso()

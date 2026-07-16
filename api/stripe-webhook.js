@@ -99,6 +99,22 @@ async function updateUserSubscription({ supabase, userId, subscription, statusOv
   const { data: existing, error: getError } = await supabase.auth.admin.getUserById(userId)
   if (getError || !existing?.user) return { skipped: true, reason: getError?.message || 'user_not_found' }
 
+  // Authoritative entitlement: write to the server-only subscriptions table (RLS-protected,
+  // not user-writable). This is what the API endpoints read to gate paid features.
+  const { error: subError } = await supabase.from('subscriptions').upsert({
+    user_id: userId,
+    plan: payload.plan,
+    status: payload.subscription_status,
+    stripe_customer_id: payload.stripe_customer_id,
+    stripe_subscription_id: payload.stripe_subscription_id,
+    stripe_price_id: payload.stripe_price_id,
+    stripe_product_id: payload.stripe_product_id,
+    current_period_end: payload.current_period_end,
+    updated_at: payload.subscription_updated_at
+  }, { onConflict: 'user_id' })
+  if (subError) throw subError
+
+  // Also mirror into user_metadata for display/back-compat only — NEVER trusted for gating.
   const current = existing.user.user_metadata || {}
   const { error } = await supabase.auth.admin.updateUserById(userId, {
     user_metadata: { ...current, ...payload }
