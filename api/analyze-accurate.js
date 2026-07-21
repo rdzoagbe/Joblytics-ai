@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import dns from 'dns'
 import net from 'net'
 import { applyDeterministicAts, validateJobTextQuality } from './ats-deterministic.js'
+import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from './job-extractors.js'
 
 export const config = { maxDuration: 60 }
 
@@ -287,6 +288,12 @@ async function fetchDirectHtml(url) {
     throw err
   }
   const html = await res.text()
+  // Prefer schema.org JobPosting data when the page embeds it — it's the real posting even
+  // when the visible page is a thin wall, and it's cleaner than scraped body text.
+  const jsonLd = extractJobPostingJsonLd(html)
+  if (jsonLd && jsonLd.length >= 150) {
+    return { text: cleanText(jsonLd, JOB_TEXT_LIMIT), provider: 'jsonld' }
+  }
   const text = cleanText(html, JOB_TEXT_LIMIT)
   if (text.length < 150) {
     const err = new Error('Direct extraction returned too little readable content.')
@@ -294,6 +301,32 @@ async function fetchDirectHtml(url) {
     throw err
   }
   return { text, provider: 'direct-html' }
+}
+
+// Known ATS platforms (Greenhouse, Lever, SmartRecruiters, Ashby) expose the job as clean
+// JSON at a public endpoint derived from the posting URL — far more reliable than scraping.
+// The API host is hard-coded per platform (never user-controlled), so this can't be an SSRF.
+async function fetchViaAtsApi(url) {
+  const target = parseAtsTarget(url)
+  if (!target) {
+    const err = new Error('Not a recognized ATS URL.')
+    err.code = 'ATS_NOT_APPLICABLE'
+    throw err
+  }
+  const res = await fetchWithTimeout(target.apiUrl, { headers: { Accept: 'application/json' } }, 9000)
+  if (!res.ok) {
+    const err = new Error(`ATS API returned HTTP ${res.status}`)
+    err.code = 'ATS_API_FAILED'
+    throw err
+  }
+  const json = await res.json().catch(() => null)
+  const text = atsJsonToText(target.platform, json, target.matchId)
+  if (!text || text.length < 120) {
+    const err = new Error('ATS API returned too little content.')
+    err.code = 'ATS_TEXT_TOO_SHORT'
+    throw err
+  }
+  return { text: cleanText(text, JOB_TEXT_LIMIT), provider: `ats-${target.platform}` }
 }
 
 // Extract the numeric LinkedIn job id from the various URL shapes LinkedIn uses.
@@ -384,6 +417,15 @@ async function fetchJobText(url) {
       attempts.push({ provider: 'linkedin-guest', code: 'LINKEDIN_GUEST_WEAK' })
     } catch (error) {
       attempts.push({ provider: 'linkedin-guest', code: error?.code || 'LINKEDIN_GUEST_FAILED', message: error?.message })
+    }
+  }
+
+  // Known ATS platforms (Greenhouse, Lever, SmartRecruiters, Ashby) — clean public JSON API.
+  if (parseAtsTarget(url)) {
+    try {
+      return await fetchViaAtsApi(url)
+    } catch (error) {
+      attempts.push({ provider: 'ats-api', code: error?.code || 'ATS_FAILED', message: error?.message })
     }
   }
 
