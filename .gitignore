@@ -6,3 +6,6 @@ dist
 *.log
 .vercel
 .env*.local
+
+# Claude Code agent worktrees (transient, never committed)
+.claude/worktrees/
