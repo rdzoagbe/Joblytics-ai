@@ -4,14 +4,15 @@ import crypto from 'crypto'
 import dns from 'dns'
 import net from 'net'
 import { applyDeterministicAts, validateJobTextQuality } from './ats-deterministic.js'
+import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from './job-extractors.js'
 
 export const config = { maxDuration: 60 }
 
 // Time budget so the function always returns before maxDuration (avoids 504s). The AI
 // step gets everything up to AI_BUDGET_MS from request start; each call is capped to the
 // remaining time, and we won't start an attempt with less than MIN_AI_ATTEMPT_MS left.
-const AI_BUDGET_MS = 48000
-const MAX_AI_CALL_MS = 40000
+const AI_BUDGET_MS = 54000
+const MAX_AI_CALL_MS = 44000
 const MIN_AI_ATTEMPT_MS = 9000
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
@@ -235,10 +236,11 @@ async function fetchNoSsrf(url, options = {}, timeoutMs = 9000, maxRedirects = 4
 function buildJinaTargets(url) {
   const clean = String(url || '').trim()
   const withoutScheme = clean.replace(/^https?:\/\//i, '')
+  // Two well-formed targets only. The old third target (`http://https://…`) was malformed
+  // and never succeeded — it just burned a full timeout and starved the AI step.
   return [...new Set([
     `https://r.jina.ai/${clean}`,
-    `https://r.jina.ai/http://${withoutScheme}`,
-    `https://r.jina.ai/http://https://${withoutScheme}`
+    `https://r.jina.ai/http://${withoutScheme}`
   ])]
 }
 
@@ -254,7 +256,7 @@ async function fetchViaJina(url) {
   const attempts = []
   for (const target of buildJinaTargets(url)) {
     try {
-      const res = await fetchWithTimeout(target, { headers, redirect: 'follow' }, 24000)
+      const res = await fetchWithTimeout(target, { headers, redirect: 'follow' }, 12000)
       if (!res.ok) {
         attempts.push({ target, status: res.status })
         continue
@@ -287,6 +289,12 @@ async function fetchDirectHtml(url) {
     throw err
   }
   const html = await res.text()
+  // Prefer schema.org JobPosting data when the page embeds it — it's the real posting even
+  // when the visible page is a thin wall, and it's cleaner than scraped body text.
+  const jsonLd = extractJobPostingJsonLd(html)
+  if (jsonLd && jsonLd.length >= 150) {
+    return { text: cleanText(jsonLd, JOB_TEXT_LIMIT), provider: 'jsonld' }
+  }
   const text = cleanText(html, JOB_TEXT_LIMIT)
   if (text.length < 150) {
     const err = new Error('Direct extraction returned too little readable content.')
@@ -294,6 +302,32 @@ async function fetchDirectHtml(url) {
     throw err
   }
   return { text, provider: 'direct-html' }
+}
+
+// Known ATS platforms (Greenhouse, Lever, SmartRecruiters, Ashby) expose the job as clean
+// JSON at a public endpoint derived from the posting URL — far more reliable than scraping.
+// The API host is hard-coded per platform (never user-controlled), so this can't be an SSRF.
+async function fetchViaAtsApi(url) {
+  const target = parseAtsTarget(url)
+  if (!target) {
+    const err = new Error('Not a recognized ATS URL.')
+    err.code = 'ATS_NOT_APPLICABLE'
+    throw err
+  }
+  const res = await fetchWithTimeout(target.apiUrl, { headers: { Accept: 'application/json' } }, 9000)
+  if (!res.ok) {
+    const err = new Error(`ATS API returned HTTP ${res.status}`)
+    err.code = 'ATS_API_FAILED'
+    throw err
+  }
+  const json = await res.json().catch(() => null)
+  const text = atsJsonToText(target.platform, json, target.matchId)
+  if (!text || text.length < 120) {
+    const err = new Error('ATS API returned too little content.')
+    err.code = 'ATS_TEXT_TOO_SHORT'
+    throw err
+  }
+  return { text: cleanText(text, JOB_TEXT_LIMIT), provider: `ats-${target.platform}` }
 }
 
 // Extract the numeric LinkedIn job id from the various URL shapes LinkedIn uses.
@@ -384,6 +418,15 @@ async function fetchJobText(url) {
       attempts.push({ provider: 'linkedin-guest', code: 'LINKEDIN_GUEST_WEAK' })
     } catch (error) {
       attempts.push({ provider: 'linkedin-guest', code: error?.code || 'LINKEDIN_GUEST_FAILED', message: error?.message })
+    }
+  }
+
+  // Known ATS platforms (Greenhouse, Lever, SmartRecruiters, Ashby) — clean public JSON API.
+  if (parseAtsTarget(url)) {
+    try {
+      return await fetchViaAtsApi(url)
+    } catch (error) {
+      attempts.push({ provider: 'ats-api', code: error?.code || 'ATS_FAILED', message: error?.message })
     }
   }
 
