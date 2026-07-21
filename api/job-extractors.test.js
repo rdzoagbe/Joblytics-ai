@@ -33,6 +33,29 @@ test('parseAtsTarget maps Ashby URLs and records the posting id to match', () =>
   assert.match(t.apiUrl, /^https:\/\/api\.ashbyhq\.com\/posting-api\/job-board\/acme/)
 })
 
+test('parseAtsTarget maps APEC detail URLs (path id and query id)', () => {
+  const a = parseAtsTarget('https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/174557607W')
+  assert.equal(a.platform, 'apec')
+  assert.equal(a.apiUrl, 'https://www.apec.fr/cms/webservices/rechercheOffre/detailOffre?numeroOffre=174557607W')
+  const b = parseAtsTarget('https://www.apec.fr/detailoffre?numeroOffre=999888777A')
+  assert.equal(b.apiUrl, 'https://www.apec.fr/cms/webservices/rechercheOffre/detailOffre?numeroOffre=999888777A')
+})
+
+test('atsJsonToText harvests APEC-style JSON regardless of exact field names', () => {
+  const json = { offre: {
+    intitulePoste: 'Chef de projet digital',
+    nomCommercialEtablissement: 'Acme SA',
+    lieuTravail: 'Paris',
+    texteHtmlOffre: '<p>Vous pilotez des projets digitaux et managez une équipe de 5 personnes sur des sujets stratégiques et transverses.</p>'
+  } }
+  const text = atsJsonToText('apec', json)
+  assert.match(text, /Chef de projet digital/)
+  assert.match(text, /Company: Acme SA/)
+  assert.match(text, /Location: Paris/)
+  assert.match(text, /pilotez des projets digitaux/)
+  assert.doesNotMatch(text, /<p>/)
+})
+
 test('parseAtsTarget returns null for unknown or invalid URLs', () => {
   assert.equal(parseAtsTarget('https://example.com/careers/123'), null)
   assert.equal(parseAtsTarget('not a url'), null)

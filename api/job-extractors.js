@@ -121,7 +121,42 @@ export function parseAtsTarget(rawUrl) {
     return { platform: 'ashby', apiUrl: `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(seg[0])}?includeCompensation=false`, matchId: seg[1] }
   }
 
+  // APEC (France): www.apec.fr/.../detail-offre/{numeroOffre}. The SPA loads each job from
+  // an internal detail webservice; we target it directly. The parser deep-harvests text so
+  // it tolerates the exact JSON field names differing.
+  if (host === 'www.apec.fr' || host === 'apec.fr') {
+    const fromQuery = u.searchParams.get('numeroOffre')
+    const fromPath = [...seg].reverse().find(s => /^\d{5,}[A-Za-z]?$/.test(s))
+    const id = fromQuery || fromPath
+    if (id) return { platform: 'apec', apiUrl: `https://www.apec.fr/cms/webservices/rechercheOffre/detailOffre?numeroOffre=${encodeURIComponent(id)}` }
+  }
+
   return null
+}
+
+// Recursively harvest job-relevant text from an arbitrary JSON payload. Used when we hit a
+// site's own detail API without knowing its exact schema: pull likely title/company/location
+// fields plus any long free-text (the description), strip HTML, and de-duplicate.
+export function harvestJobJsonText(json) {
+  const seen = new Set()
+  const head = []
+  const body = []
+  const visit = (node, key = '') => {
+    if (node == null) return
+    if (typeof node === 'string') {
+      const text = stripHtmlToText(htmlUnescape(node)).trim()
+      if (!text || seen.has(text)) return
+      if (/titre|intitul|poste|libell|fonction/i.test(key) && text.length <= 160) { seen.add(text); head.push(text) }
+      else if (/entreprise|etablissement|societe|recruteur|employeur/i.test(key) && text.length <= 160) { seen.add(text); head.push(`Company: ${text}`) }
+      else if (/lieu|ville|localisation|region|departement|adresse/i.test(key) && text.length <= 160) { seen.add(text); head.push(`Location: ${text}`) }
+      else if (text.length >= 80) { seen.add(text); body.push(text) }
+      return
+    }
+    if (Array.isArray(node)) { node.forEach(n => visit(n, key)); return }
+    if (typeof node === 'object') { for (const [k, v] of Object.entries(node)) visit(v, k) }
+  }
+  visit(json)
+  return [...head, ...body].join('\n').trim()
 }
 
 // Convert an ATS API JSON payload to plain job text. Returns '' when nothing usable.
@@ -154,6 +189,10 @@ export function atsJsonToText(platform, json, matchId) {
       if (!job) return ''
       const parts = [job.title, job.location, stripHtmlToText(job.descriptionHtml || job.description || '')]
       return parts.filter(Boolean).join('\n').trim()
+    }
+    if (platform === 'apec') {
+      // Unknown exact schema — harvest defensively so it works regardless of field names.
+      return harvestJobJsonText(json.offre || json.detail || json)
     }
   } catch {
     return ''
