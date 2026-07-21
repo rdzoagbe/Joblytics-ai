@@ -25,6 +25,24 @@ const premium = {
   purple: '#7B61B8'
 }
 
+// Display-only formatter for skill/keyword chips coming from the engine in
+// lowercase ("aws", "gestion de projet"). Uppercases known acronyms and
+// capitalizes the first letter of other words. String in, string out.
+const SKILL_ACRONYMS = new Set(['aws', 'gcp', 'sql', 'api', 'ci/cd', 'etl', 'seo', 'kpi', 'crm', 'sso', 'saml', 'mfa', 'mdm', 'iam', 'itil', 'vpn', 'dns', 'ux', 'ui', 'ai', 'bi', 'hr'])
+
+export function formatSkillLabel(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return raw
+  const words = raw.split(/\s+/).map(word => {
+    const lower = word.toLowerCase()
+    if (SKILL_ACRONYMS.has(lower)) return lower.toUpperCase()
+    return word
+  })
+  const result = words.join(' ')
+  // Capitalize only the first letter of the phrase, preserving the rest as-is.
+  return result.charAt(0).toUpperCase() + result.slice(1)
+}
+
 function safeArray(value, limit = 8) {
   return Array.isArray(value) ? value.filter(Boolean).slice(0, limit) : []
 }
@@ -68,13 +86,13 @@ function Tag({ label, type = 'found' }) {
     neutral: { bg: 'rgba(181,102,60,0.09)', color: premium.copper, border: 'rgba(181,102,60,0.20)' }
   }
   const s = styles[type] || styles.found
-  return <span style={{ fontSize: 11, padding: '6px 10px', borderRadius: 999, background: s.bg, color: s.color, border: `1px solid ${s.border}`, display: 'inline-block', margin: '3px 4px 3px 0', fontWeight: 850 }}>{label}</span>
+  return <span style={{ fontSize: 11, padding: '6px 10px', borderRadius: 999, background: s.bg, color: s.color, border: `1px solid ${s.border}`, display: 'inline-block', margin: '3px 4px 3px 0', fontWeight: 850 }}>{formatSkillLabel(label)}</span>
 }
 
 function InfoPill({ label, value }) {
   const { t } = useLang()
   return (
-    <div style={{ border: `1px solid ${premium.line}`, borderRadius: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.52)', minHeight: 50 }}>
+    <div style={{ border: `1px solid ${premium.line}`, borderRadius: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.52)', minHeight: 50, minWidth: 0 }}>
       <p style={{ margin: '0 0 6px', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: premium.copper, fontWeight: 950 }}>{label}</p>
       <strong style={{ display: 'block', color: premium.navy, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || t('rv_not_stated', 'Not stated')}</strong>
     </div>
@@ -97,9 +115,36 @@ function BulletList({ items, tone = 'good', empty, max = 5 }) {
 
 function SummaryCard({ title, children }) {
   return (
-    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: premium.paper, minHeight: 132 }}>
+    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: premium.paper, minHeight: 132, minWidth: 0 }}>
       <h3 style={{ margin: '0 0 14px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{title}</h3>
       {children}
+    </section>
+  )
+}
+
+// Collapsible group wrapper. Open/closed state is in-memory only.
+function Section({ title, count, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section style={{ border: `1px solid ${premium.line}`, borderRadius: 22, background: premium.paper, marginBottom: 14, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '16px 18px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left'
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span style={{ color: premium.navy, fontSize: 15, fontWeight: 950, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+          {typeof count === 'number' && count > 0 && (
+            <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: premium.copper, background: premium.copperSoft, border: '1px solid rgba(181,102,60,0.20)', borderRadius: 999, padding: '2px 9px' }}>{count}</span>
+          )}
+        </span>
+        <span aria-hidden="true" style={{ flexShrink: 0, color: premium.copper, fontSize: 13, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>▾</span>
+      </button>
+      {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
     </section>
   )
 }
@@ -119,7 +164,7 @@ function ScoreMathCard({ breakdown, penalty, explanation, total }) {
           return (
             <div key={factor.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span style={{ color: premium.navy, fontSize: 12.5, fontWeight: 700 }}>{factor.label}</span>
                   <span style={{ color: premium.muted, fontSize: 11.5 }}>{sub}% × {factor.weight}% = <strong style={{ color: premium.navy }}>{factor.points}</strong> pts</span>
                 </div>
@@ -333,7 +378,7 @@ function JobDetailsCard({ data }) {
           {experienceRequired && <InfoPill label={t('rv_experience_required', 'Experience required')} value={experienceRequired} />}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+      <div className="rvx-grid-2">
         {aboutCompany && <SummaryCard title={t('rv_about_company', 'About the company')}><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutCompany}</p></SummaryCard>}
         {aboutRole && <SummaryCard title={t('rv_the_role', 'The role')}><p style={{ margin: 0, fontSize: 12, color: premium.muted, lineHeight: 1.55 }}>{aboutRole}</p></SummaryCard>}
         {responsibilities.length > 0 && <SummaryCard title={t('rv_key_responsibilities', 'Key responsibilities')}><BulletList items={responsibilities} tone="good" empty="" max={4} /></SummaryCard>}
@@ -344,7 +389,8 @@ function JobDetailsCard({ data }) {
   )
 }
 
-function SelectedAnalysisSummary({ data, savedRow, t }) {
+// Derives everything the hero and the sections need from the raw analysis payload.
+function deriveSummary(data, savedRow, t) {
   const context = data.job_context || {}
   const recruiter = data.recruiter_shortlist || {}
   const keyword = data.keyword_match || {}
@@ -388,12 +434,31 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
   const seniorityScore = safeScore(seniority.score, score)
   const recruiterScore = safeScore(recruiter.probability, score)
 
+  // Top 3 actions for the hero: prefer 'missing' requirements from coverage,
+  // then gaps to address, then quick wins.
+  const coverageMissing = (Array.isArray(data.requirements_coverage) ? data.requirements_coverage : [])
+    .filter(r => r && typeof r === 'object' && String(r.status || '').toLowerCase() === 'missing' && String(r.requirement || '').trim())
+    .map(r => String(r.suggestion || '').trim() || String(r.requirement).trim())
+  const topActions = unique([...coverageMissing.slice(0, 3), ...gaps, ...quickWins], 12).slice(0, 3)
+
+  return {
+    context, score, tone, title, company, subtitle, summary, confidence,
+    missingKeywords, foundKeywords, quickWins, gaps, met, unmet,
+    salaryText, statusText, recruiterSummary,
+    keywordScore, experienceScore, semanticScore, seniorityScore, recruiterScore,
+    topActions
+  }
+}
+
+// First viewport: score + verdict, top 3 actions, one primary CTA.
+function HeroSummary({ data, summary, t, onGoCoach }) {
+  const { score, tone, title, subtitle, confidence, topActions, context } = summary
   return (
-    <section style={{ marginBottom: 20, padding: 24, borderRadius: 28, background: premium.paper, border: `1px solid ${premium.line}`, boxShadow: '0 24px 70px rgba(16,24,43,0.08)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 20, alignItems: 'start', borderBottom: `1px solid ${premium.line}`, paddingBottom: 18 }}>
-        <div>
+    <section style={{ marginBottom: 16, padding: 24, borderRadius: 28, background: premium.paper, border: `1px solid ${premium.line}`, boxShadow: '0 24px 70px rgba(16,24,43,0.08)' }}>
+      <div className="rvx-hero-head" style={{ borderBottom: `1px solid ${premium.line}`, paddingBottom: 18 }}>
+        <div style={{ minWidth: 0, flex: '1 1 220px' }}>
           <p style={{ margin: 0, color: premium.copper, fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{t('selected_analysis', 'Selected analysis')}</p>
-          <h1 style={{ margin: '7px 0 6px', color: premium.navy, fontFamily: 'Georgia, Newsreader, serif', fontSize: 'clamp(28px,4vw,48px)', lineHeight: 1, letterSpacing: '-0.055em', fontWeight: 500 }}>{title}</h1>
+          <h1 style={{ margin: '7px 0 6px', color: premium.navy, fontFamily: 'Georgia, Newsreader, serif', fontSize: 'clamp(26px,4vw,44px)', lineHeight: 1.05, letterSpacing: '-0.045em', fontWeight: 500, overflowWrap: 'break-word' }}>{title}</h1>
           {subtitle && <p style={{ margin: 0, color: premium.muted, fontSize: 12 }}>{subtitle}</p>}
           {confidence && (
             <span style={{
@@ -407,56 +472,187 @@ function SelectedAnalysisSummary({ data, savedRow, t }) {
             </span>
           )}
         </div>
-        <div style={{ width: 108, height: 108, borderRadius: '50%', border: `9px solid ${tone}`, background: score >= 75 ? 'rgba(85,124,100,0.10)' : score >= 55 ? 'rgba(185,134,59,0.10)' : 'rgba(184,92,85,0.10)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        <div className="rvx-ring" style={{ borderColor: tone, background: score >= 75 ? 'rgba(85,124,100,0.10)' : score >= 55 ? 'rgba(185,134,59,0.10)' : 'rgba(184,92,85,0.10)' }}>
           <div style={{ textAlign: 'center' }}>
-            <strong style={{ display: 'block', fontFamily: 'Georgia, Newsreader, serif', color: tone, fontSize: 31, lineHeight: 1 }}>{score}%</strong>
+            <strong className="rvx-ring-score" style={{ display: 'block', fontFamily: 'Georgia, Newsreader, serif', color: tone, lineHeight: 1 }}>{score}%</strong>
             <span style={{ display: 'block', marginTop: 5, color: tone, fontSize: 9, fontWeight: 950, letterSpacing: '0.07em' }}>{scoreLabel(score, data.overall_verdict, t)}</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginTop: 18 }}>
-        <ScoreBreakdownCard label={t('rv_sb_keywords', 'Keywords')} score={keywordScore} helper={`${foundKeywords.length} ${t('rv_found_word', 'found')} · ${missingKeywords.length} ${t('rv_missing_word', 'missing')}`} color={premium.gold} />
-        <ScoreBreakdownCard label={t('rv_sb_experience', 'Experience')} score={experienceScore} helper={t('rv_sb_experience_helper', 'Relevant experience evidence')} color={premium.green} />
-        <ScoreBreakdownCard label={t('rv_sb_semantic', 'Semantic fit')} score={semanticScore} helper={t('rv_sb_semantic_helper', 'Role/responsibility alignment')} color={premium.blue} />
-        <ScoreBreakdownCard label={t('rv_sb_seniority', 'Seniority')} score={seniorityScore} helper={t('rv_sb_seniority_helper', 'Level and scope alignment')} color={premium.purple} />
-        <ScoreBreakdownCard label={t('rv_sb_recruiter', 'Recruiter')} score={recruiterScore} helper={t('rv_sb_recruiter_helper', 'Shortlist probability signal')} color={tone} />
+      <div style={{ marginTop: 16 }}>
+        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 900, letterSpacing: '0.10em', textTransform: 'uppercase', color: premium.copper }}>
+          {topActions.length ? t('rv_hero_top_actions', 'Top 3 actions') : t('rv_hero_verdict_kicker', 'Where you stand')}
+        </p>
+        {topActions.length ? (
+          <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 9 }}>
+            {topActions.map((action, i) => (
+              <li key={`hero-action-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ flexShrink: 0, width: 21, height: 21, borderRadius: '50%', background: premium.copperSoft, border: '1px solid rgba(181,102,60,0.24)', color: premium.copper, fontSize: 11, fontWeight: 950, display: 'grid', placeItems: 'center' }}>{i + 1}</span>
+                <p style={{ margin: 0, color: premium.navy, fontSize: 13, lineHeight: 1.5, fontWeight: 600 }}>{action}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p style={{ margin: 0, color: premium.green, fontSize: 13, lineHeight: 1.5, fontWeight: 600 }}>
+            {t('rv_hero_no_actions', 'No critical fixes detected — you can apply with confidence.')}
+          </p>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 18 }}>
+      <div className="rvx-hero-cta" style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        {onGoCoach && (
+          <button
+            type="button"
+            onClick={onGoCoach}
+            style={{
+              flex: '1 1 220px', padding: '13px 18px', borderRadius: 14, border: 'none', cursor: 'pointer',
+              background: premium.navy, color: premium.ivory, fontFamily: 'inherit',
+              fontSize: 13.5, fontWeight: 800, letterSpacing: '0.01em'
+            }}
+          >
+            {t('rv_hero_fix_cta', 'Fix these with CV Coach →')}
+          </button>
+        )}
+        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+          <SmartApplyBtn context={context} jobUrl={data.job_url || null} verdict={data.overall_verdict} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default function ResultsView({ data, savedRow: serverSavedRow, rateLimit, onReset, onGoCoach }) {
+  const { t } = useLang()
+  const score = data.display_score ?? 0
+  const jobUrl = data.job_url || null
+  const [analysisRow, setAnalysisRow] = useState(() => {
+    if (serverSavedRow) return serverSavedRow
+    if (data.id) return data
+    return null
+  })
+  const autoSaveStatus = analysisRow ? 'saved' : 'idle'
+
+  useEffect(() => {
+    if (serverSavedRow && (!analysisRow || analysisRow.id !== serverSavedRow.id)) setAnalysisRow(serverSavedRow)
+  }, [serverSavedRow, analysisRow])
+
+  const handleStatusUpdate = updated => setAnalysisRow(updated)
+
+  const savedRow = analysisRow || serverSavedRow
+  const s = deriveSummary(data, savedRow, t)
+
+  return (
+    <div className="rvx" style={{ animation: 'fadeUp 0.5s ease' }}>
+      <style>{`
+        .rvx { min-width: 0; }
+        .rvx .rvx-hero-head { display: flex; gap: 20px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+        .rvx .rvx-ring { width: 108px; height: 108px; border-radius: 50%; border: 9px solid transparent; display: grid; place-items: center; flex-shrink: 0; }
+        .rvx .rvx-ring-score { font-size: 31px; }
+        .rvx .rvx-grid-break { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+        .rvx .rvx-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+        .rvx .rvx-grid-pills { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+        @media (max-width: 640px) {
+          .rvx .rvx-grid-break, .rvx .rvx-grid-2 { grid-template-columns: 1fr; }
+          .rvx .rvx-grid-pills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .rvx .rvx-ring { width: 88px; height: 88px; border-width: 7px; }
+          .rvx .rvx-ring-score { font-size: 24px; }
+        }
+      `}</style>
+
+      <LimitedAnalysisBanner data={data} onReset={onReset} />
+      <LanguageMismatchBanner languageCheck={data.language_check} onReset={onReset} />
+
+      <HeroSummary data={data} summary={s} t={t} onGoCoach={onGoCoach} />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, padding: '0 4px', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {autoSaveStatus === 'saved' && <span style={{ fontSize: 11, color: premium.muted, fontWeight: 800 }}>✓ {t('saved_to_history')}</span>}
+          {autoSaveStatus === 'saved' && analysisRow && <StatusPill analysis={analysisRow} onUpdate={handleStatusUpdate} compact />}
+        </div>
+        <button onClick={onReset} style={{ background: premium.paper, border: `1px solid ${premium.line}`, borderRadius: 20, padding: '7px 15px', cursor: 'pointer', color: premium.muted, fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>↻ {t('run_another')}</button>
+      </div>
+
+      <NextStepsCard score={score} onGoCoach={onGoCoach} onReset={onReset} jobUrl={jobUrl} easyApply={data.job_context?.easy_apply} />
+      <WaitlistBanner rateLimit={rateLimit} />
+
+      {/* Group 1 — Why this score (open by default) */}
+      <Section title={t('rv_sec_why_score', 'Why this score')} defaultOpen>
+        <div className="rvx-grid-break">
+          <ScoreBreakdownCard label={t('rv_sb_keywords', 'Keywords')} score={s.keywordScore} helper={`${s.foundKeywords.length} ${t('rv_found_word', 'found')} · ${s.missingKeywords.length} ${t('rv_missing_word', 'missing')}`} color={premium.gold} />
+          <ScoreBreakdownCard label={t('rv_sb_experience', 'Experience')} score={s.experienceScore} helper={t('rv_sb_experience_helper', 'Relevant experience evidence')} color={premium.green} />
+          <ScoreBreakdownCard label={t('rv_sb_semantic', 'Semantic fit')} score={s.semanticScore} helper={t('rv_sb_semantic_helper', 'Role/responsibility alignment')} color={premium.blue} />
+          <ScoreBreakdownCard label={t('rv_sb_seniority', 'Seniority')} score={s.seniorityScore} helper={t('rv_sb_seniority_helper', 'Level and scope alignment')} color={premium.purple} />
+          <ScoreBreakdownCard label={t('rv_sb_recruiter', 'Recruiter')} score={s.recruiterScore} helper={t('rv_sb_recruiter_helper', 'Shortlist probability signal')} color={s.tone} />
+        </div>
+        <div style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: 'rgba(255,255,255,0.50)', marginTop: 14 }}>
+          <h3 style={{ margin: '0 0 14px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('missing_keywords', 'Missing keywords')}</h3>
+          <div style={{ minHeight: 42 }}>{s.missingKeywords.length ? s.missingKeywords.map(k => <Tag key={`missing-${k}`} label={k} type="missing" />) : <p style={{ margin: 0, color: premium.green, fontSize: 12 }}>{t('rv_no_missing_keywords', 'No critical missing keywords detected.')}</p>}</div>
+          <h3 style={{ margin: '18px 0 10px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('rv_found_in_cv', 'Found in CV')}</h3>
+          <div>{s.foundKeywords.length ? s.foundKeywords.map(k => <Tag key={`found-${k}`} label={k} type="found" />) : <p style={{ margin: 0, color: premium.muted, fontSize: 12 }}>{t('rv_no_keyword_evidence', 'No strong keyword evidence returned.')}</p>}</div>
+        </div>
+        <ScoreMathCard breakdown={data.score_breakdown} penalty={data.score_penalty} explanation={data.score_explanation} total={data.display_score} />
+      </Section>
+
+      {/* Group 2 — Requirements & evidence */}
+      <Section title={t('rv_sec_requirements', 'Requirements & evidence')} count={s.gaps.length + s.unmet.length}>
         <div style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: 'rgba(255,255,255,0.50)' }}>
-          <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.7 }}>{summary}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginTop: 14 }}>
-            <InfoPill label={t('work_mode', 'Work mode')} value={context.work_mode || t('rv_not_stated', 'Not stated')} />
-            <InfoPill label={t('contract', 'Contract')} value={context.contract_type || t('rv_not_stated', 'Not stated')} />
-            <InfoPill label={t('salary', 'Salary')} value={salaryText} />
-            <InfoPill label={t('rv_status', 'Status')} value={statusText} />
-          </div>
+          <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.7 }}>{s.summary}</p>
           <div style={{ marginTop: 12, padding: '13px 14px', borderRadius: 14, border: '1px solid rgba(181,102,60,0.20)', background: premium.copperSoft }}>
             <strong style={{ display: 'block', color: premium.navy, fontSize: 12, marginBottom: 5 }}>{t('rv_recruiter_screening_summary', 'Recruiter screening summary')}</strong>
-            <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.5 }}>{recruiterSummary}</p>
+            <p style={{ margin: 0, color: premium.muted, fontSize: 12, lineHeight: 1.5 }}>{s.recruiterSummary}</p>
           </div>
         </div>
-
-        <div style={{ border: `1px solid ${premium.line}`, borderRadius: 20, padding: 16, background: 'rgba(255,255,255,0.50)' }}>
-          <h3 style={{ margin: '0 0 14px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('missing_keywords', 'Missing keywords')}</h3>
-          <div style={{ minHeight: 42 }}>{missingKeywords.length ? missingKeywords.map(k => <Tag key={`missing-${k}`} label={k} type="missing" />) : <p style={{ margin: 0, color: premium.green, fontSize: 12 }}>{t('rv_no_missing_keywords', 'No critical missing keywords detected.')}</p>}</div>
-          <h3 style={{ margin: '18px 0 10px', color: premium.navy, fontSize: 14, fontWeight: 950 }}>{t('rv_found_in_cv', 'Found in CV')}</h3>
-          <div>{foundKeywords.length ? foundKeywords.map(k => <Tag key={`found-${k}`} label={k} type="found" />) : <p style={{ margin: 0, color: premium.muted, fontSize: 12 }}>{t('rv_no_keyword_evidence', 'No strong keyword evidence returned.')}</p>}</div>
+        <div className="rvx-grid-break" style={{ marginTop: 14 }}>
+          <SummaryCard title={t('rv_quick_wins', 'Quick wins')}><BulletList items={s.quickWins} tone="good" empty={t('rv_no_quick_wins', 'No quick wins returned.')} max={4} /></SummaryCard>
+          <SummaryCard title={t('rv_gaps_to_address', 'Gaps to address')}><BulletList items={s.gaps} tone="bad" empty={t('rv_no_gaps', 'No priority gaps detected.')} max={4} /></SummaryCard>
+          <SummaryCard title={t('rv_requirements_met', 'Requirements met')}><BulletList items={s.met} tone="good" empty={t('rv_no_met', 'No met requirements returned.')} max={5} /></SummaryCard>
+          <SummaryCard title={t('rv_requirements_missing', 'Requirements missing')}><BulletList items={s.unmet} tone="bad" empty={t('rv_no_unmet', 'No missing requirements detected.')} max={5} /></SummaryCard>
         </div>
-      </div>
+        <RequirementsCoverageCard items={data.requirements_coverage} proofGaps={data.proof_gaps} />
+        <ImprovementPlanCard plan={data.improvement_plan} />
+      </Section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginTop: 14 }}>
-        <SummaryCard title={t('rv_quick_wins', 'Quick wins')}><BulletList items={quickWins} tone="good" empty={t('rv_no_quick_wins', 'No quick wins returned.')} max={4} /></SummaryCard>
-        <SummaryCard title={t('rv_gaps_to_address', 'Gaps to address')}><BulletList items={gaps} tone="bad" empty={t('rv_no_gaps', 'No priority gaps detected.')} max={4} /></SummaryCard>
-        <SummaryCard title={t('rv_requirements_met', 'Requirements met')}><BulletList items={met} tone="good" empty={t('rv_no_met', 'No met requirements returned.')} max={5} /></SummaryCard>
-        <SummaryCard title={t('rv_requirements_missing', 'Requirements missing')}><BulletList items={unmet} tone="bad" empty={t('rv_no_unmet', 'No missing requirements detected.')} max={5} /></SummaryCard>
-      </div>
+      {/* Group 3 — The job */}
+      <Section title={t('rv_sec_job', 'The job')}>
+        <div className="rvx-grid-pills" style={{ marginBottom: 14 }}>
+          <InfoPill label={t('work_mode', 'Work mode')} value={s.context.work_mode || t('rv_not_stated', 'Not stated')} />
+          <InfoPill label={t('contract', 'Contract')} value={s.context.contract_type || t('rv_not_stated', 'Not stated')} />
+          <InfoPill label={t('salary', 'Salary')} value={s.salaryText} />
+          <InfoPill label={t('rv_status', 'Status')} value={s.statusText} />
+        </div>
+        <JobDetailsCard data={data} />
+        <SalaryInsightCard data={data} />
+        <SeniorityCard seniority={data.seniority} />
+      </Section>
 
-      <ScoreMathCard breakdown={data.score_breakdown} penalty={data.score_penalty} explanation={data.score_explanation} total={data.display_score} />
-      <RequirementsCoverageCard items={data.requirements_coverage} proofGaps={data.proof_gaps} />
-      <ImprovementPlanCard plan={data.improvement_plan} />
-    </section>
+      {/* Group 4 — Interview prep */}
+      <Section title={t('rv_sec_interview', 'Interview prep')}>
+        <InterviewPrepCard prep={data.interview_prep} score={score} />
+        {onGoCoach && <CvCoachPreview data={data} onGoCoach={onGoCoach} />}
+      </Section>
+
+      {data.format_warnings?.filter(w => w?.length > 5).length > 0 && (
+        <div style={{ background: 'rgba(185,134,59,0.08)', border: '1px solid rgba(185,134,59,0.22)', borderRadius: 18, padding: '14px 16px', marginBottom: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 900, color: premium.gold, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>{t('format_warnings')}</p>
+          {data.format_warnings.filter(w => w?.length > 5).map((w, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+              <span style={{ color: premium.gold, flexShrink: 0 }}>⚠</span>
+              <p style={{ fontSize: 12, color: premium.muted, lineHeight: 1.5, margin: 0 }}>{w}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="btn-row">
+        <button onClick={onReset} className="btn-primary" style={{ width: '100%', background: premium.navy, color: premium.ivory }}>↻ {t('run_another')}</button>
+        {onGoCoach && (
+          <button onClick={onGoCoach} style={{ padding: 14, borderRadius: 14, background: premium.paper, color: premium.muted, border: `1px solid ${premium.line}`, fontFamily: 'Georgia, Newsreader, serif', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            🎤 {t('nav_coach')}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -484,72 +680,6 @@ function LimitedAnalysisBanner({ data, onReset }) {
       }}>
         {t('limited_analysis_cta', 'Re-run in Accurate paste mode for a trustworthy score →')}
       </button>
-    </div>
-  )
-}
-
-export default function ResultsView({ data, savedRow: serverSavedRow, rateLimit, onReset, onGoCoach }) {
-  const { t } = useLang()
-  const score = data.display_score ?? 0
-  const jobUrl = data.job_url || null
-  const [analysisRow, setAnalysisRow] = useState(() => {
-    if (serverSavedRow) return serverSavedRow
-    if (data.id) return data
-    return null
-  })
-  const autoSaveStatus = analysisRow ? 'saved' : 'idle'
-
-  useEffect(() => {
-    if (serverSavedRow && (!analysisRow || analysisRow.id !== serverSavedRow.id)) setAnalysisRow(serverSavedRow)
-  }, [serverSavedRow, analysisRow])
-
-  const handleStatusUpdate = updated => setAnalysisRow(updated)
-
-  return (
-    <div style={{ animation: 'fadeUp 0.5s ease' }}>
-      <LimitedAnalysisBanner data={data} onReset={onReset} />
-      <SelectedAnalysisSummary data={data} savedRow={analysisRow || serverSavedRow} t={t} />
-      <JobDetailsCard data={data} />
-      <LanguageMismatchBanner languageCheck={data.language_check} onReset={onReset} />
-      <WaitlistBanner rateLimit={rateLimit} />
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, padding: '0 4px', gap: 8, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {autoSaveStatus === 'saved' && <span style={{ fontSize: 11, color: premium.muted, fontWeight: 800 }}>✓ {t('saved_to_history')}</span>}
-          {autoSaveStatus === 'saved' && analysisRow && <StatusPill analysis={analysisRow} onUpdate={handleStatusUpdate} compact />}
-        </div>
-        <button onClick={onReset} style={{ background: premium.paper, border: `1px solid ${premium.line}`, borderRadius: 20, padding: '7px 15px', cursor: 'pointer', color: premium.muted, fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>↻ {t('run_another')}</button>
-      </div>
-
-      <NextStepsCard score={score} onGoCoach={onGoCoach} onReset={onReset} jobUrl={jobUrl} easyApply={data.job_context?.easy_apply} />
-      <SalaryInsightCard data={data} />
-      <SeniorityCard seniority={data.seniority} />
-      <InterviewPrepCard prep={data.interview_prep} score={score} />
-
-      {onGoCoach && <CvCoachPreview data={data} onGoCoach={onGoCoach} />}
-
-      {data.format_warnings?.filter(w => w?.length > 5).length > 0 && (
-        <div style={{ background: 'rgba(185,134,59,0.08)', border: '1px solid rgba(185,134,59,0.22)', borderRadius: 18, padding: '14px 16px', marginBottom: 12 }}>
-          <p style={{ fontSize: 10, fontWeight: 900, color: premium.gold, letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>{t('format_warnings')}</p>
-          {data.format_warnings.filter(w => w?.length > 5).map((w, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: premium.gold, flexShrink: 0 }}>⚠</span>
-              <p style={{ fontSize: 12, color: premium.muted, lineHeight: 1.5, margin: 0 }}>{w}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <SmartApplyBtn context={data.job_context} jobUrl={jobUrl} verdict={data.overall_verdict} />
-
-      <div className="btn-row">
-        <button onClick={onReset} className="btn-primary" style={{ width: '100%', background: premium.navy, color: premium.ivory }}>↻ {t('run_another')}</button>
-        {onGoCoach && (
-          <button onClick={onGoCoach} style={{ padding: 14, borderRadius: 14, background: premium.paper, color: premium.muted, border: `1px solid ${premium.line}`, fontFamily: 'Georgia, Newsreader, serif', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            🎤 {t('nav_coach')}
-          </button>
-        )}
-      </div>
     </div>
   )
 }
