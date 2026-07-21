@@ -106,6 +106,95 @@ function formatTime(value, lang = 'en') {
   return new Date(value).toLocaleTimeString(localeMap[lang] || 'en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
+function daysSince(value) {
+  if (!value) return null
+  const diff = Date.now() - new Date(value).getTime()
+  if (!Number.isFinite(diff)) return null
+  return Math.floor(diff / 86400000)
+}
+
+const PIPELINE_STAGES = [
+  { key: 'all', labelKey: 'pipeline_all', fallback: 'All', color: 'var(--text-secondary)' },
+  { key: 'saved', labelKey: 'pipeline_saved', fallback: 'Saved', color: '#8DA3BD' },
+  { key: 'applied', labelKey: 'pipeline_applied', fallback: 'Applied', color: '#3b82f6' },
+  { key: 'interview', labelKey: 'pipeline_interview', fallback: 'Interview', color: '#8b5cf6' },
+  { key: 'offer', labelKey: 'pipeline_offer', fallback: 'Offer', color: '#10b981' },
+  { key: 'rejected', labelKey: 'pipeline_rejected', fallback: 'Rejected', color: '#ef4444' }
+]
+
+function PipelineBar({ counts, filter, onFilter, t }) {
+  return (
+    <section className="historyMD-card" style={{ padding: '16px 20px' }}>
+      <p className="historyMD-kicker" style={{ marginBottom: 12 }}>{t('pipeline_kicker', 'Application pipeline')}</p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {PIPELINE_STAGES.map(({ key, labelKey, fallback, color }) => {
+          const count = counts[key] ?? 0
+          const active = filter === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onFilter(active && key !== 'all' ? 'all' : key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+                borderRadius: 10, border: `1.5px solid ${active ? color : 'var(--border)'}`,
+                background: active ? `${color}18` : 'var(--bg-input)',
+                color: active ? color : 'var(--text-secondary)',
+                fontWeight: 700, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s'
+              }}
+            >
+              {t(labelKey, fallback)}
+              <span style={{ fontSize: 16, fontWeight: 800, color }}>· {count}</span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function FollowUpNudge({ analysis, days, onGenerateMessage, t, small = false }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      marginTop: small ? 4 : 12, padding: small ? '3px 8px' : '8px 12px', borderRadius: 8,
+      background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)',
+      color: '#b45309', fontSize: small ? 11 : 13, fontWeight: 600
+    }}>
+      <span>{t('nudge_follow_up', { n: days }, 'Applied {n} days ago — time to follow up')}</span>
+      <button
+        type="button"
+        onClick={event => { event.stopPropagation(); onGenerateMessage?.(analysis) }}
+        disabled={!onGenerateMessage}
+        style={{
+          border: '1px solid rgba(245,158,11,0.5)', background: 'rgba(245,158,11,0.18)', color: '#92400e',
+          borderRadius: 6, padding: small ? '1px 7px' : '4px 10px', fontSize: small ? 10 : 12,
+          fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit'
+        }}
+      >
+        {t('nudge_follow_up_cta', 'Write follow-up')}
+      </button>
+    </div>
+  )
+}
+
+function InterviewHint({ analysis, onSelectAnalysis, t, small = false }) {
+  return (
+    <button
+      type="button"
+      onClick={event => { event.stopPropagation(); onSelectAnalysis?.(analysis) }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        marginTop: small ? 4 : 12, padding: small ? '2px 8px' : '6px 12px', borderRadius: 8,
+        background: 'rgba(139,92,246,0.10)', border: '1px solid rgba(139,92,246,0.30)',
+        color: '#7c3aed', fontSize: small ? 11 : 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
+      }}
+    >
+      {t('nudge_interview_prep', 'Interview stage — prep now')}
+    </button>
+  )
+}
+
 function StatCard({ label, value, helper, icon }) {
   return <article className="historyMD-stat"><span>{icon}</span><div><p>{label}</p><strong>{value}</strong><em>{helper}</em></div></article>
 }
@@ -182,7 +271,7 @@ export default function Dashboard({ onNewAnalysis, onSelectAnalysis, onBuildCv, 
   }, [enriched])
 
   const pipelineCounts = useMemo(() => {
-    const counts = { applied: 0, interview: 0, offer: 0, rejected: 0 }
+    const counts = { all: enriched.length, saved: 0, applied: 0, interview: 0, offer: 0, rejected: 0, withdrawn: 0 }
     enriched.forEach(item => {
       const s = getPipelineStatus(item)
       if (s in counts) counts[s]++
@@ -242,7 +331,7 @@ export default function Dashboard({ onNewAnalysis, onSelectAnalysis, onBuildCv, 
   const { foundKeywords, missingKeywords, quickWins, gaps, met, unmet } = getHistoryLists(selectedResult)
 
   const filters = [
-    { value: 'all', label: 'All' }, { value: 'strong', label: 'Strong' }, { value: 'medium', label: 'Medium' }, { value: 'weak', label: 'Needs work' }, { value: 'saved', label: 'Saved' }, { value: 'applied', label: 'Applied' }, { value: 'interview', label: 'Interview' }
+    { value: 'all', label: 'All' }, { value: 'strong', label: 'Strong' }, { value: 'medium', label: 'Medium' }, { value: 'weak', label: 'Needs work' }
   ]
 
   return (
@@ -250,41 +339,9 @@ export default function Dashboard({ onNewAnalysis, onSelectAnalysis, onBuildCv, 
       <main className="historyMD-shell">
         <section className="historyMD-hero"><div><p className="historyMD-kicker">History</p><h1>{t('history_saved_title', 'Your saved analyses')}</h1><span>{t('history_saved_intro', 'Review previous job analyses quickly, compare scores, and reopen the full report only when needed.')}</span></div><div className="historyMD-actions"><button type="button" className="historyMD-primary" onClick={onNewAnalysis}>+ {t('history_new_check', 'New analysis')}</button>{analyses.length > 0 && <button type="button" className="historyMD-ghost historyMD-danger" onClick={() => setDeleteAllOpen(true)}>{t('history_delete_all', 'Delete all')}</button>}</div></section>
 
-        {!loading && analyses.length > 0 && <section className="historyMD-stats"><StatCard icon="T" label="Total analyses" value={stats.total} helper="Saved reports" /><StatCard icon="A" label="Average fit score" value={`${stats.avg}%`} helper="Across all analyses" /><StatCard icon="S" label="Strong matches" value={stats.strong} helper="75% and above" /><StatCard icon="N" label="Needs work" value={stats.needsWork} helper="Below 55%" /></section>}
+        {!loading && analyses.length > 0 && <PipelineBar counts={pipelineCounts} filter={filter} onFilter={setFilter} t={t} />}
 
-        {!loading && analyses.length > 0 && (
-          <section className="historyMD-card" style={{ padding: '16px 20px' }}>
-            <p className="historyMD-kicker" style={{ marginBottom: 12 }}>Application funnel</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {[
-                { key: 'applied', label: 'Applied', color: '#3b82f6' },
-                { key: 'interview', label: 'Interview', color: '#8b5cf6' },
-                { key: 'offer', label: 'Offer', color: '#10b981' },
-                { key: 'rejected', label: 'Rejected', color: '#ef4444' }
-              ].map(({ key, label, color }) => {
-                const count = pipelineCounts[key]
-                const active = filter === key
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setFilter(active ? 'all' : key)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
-                      borderRadius: 10, border: `1.5px solid ${active ? color : 'var(--border)'}`,
-                      background: active ? `${color}18` : 'var(--bg-input)',
-                      color: active ? color : 'var(--text-secondary)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: 13, transition: 'all 0.15s'
-                    }}
-                  >
-                    <span style={{ fontSize: 18, fontWeight: 800, color }}>{count}</span>
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-        )}
+        {!loading && analyses.length > 0 && <section className="historyMD-stats"><StatCard icon="T" label={t('pipeline_stat_total', 'Total analyses')} value={stats.total} helper={t('pipeline_stat_total_helper', 'Saved reports')} /><StatCard icon="A" label={t('pipeline_stat_active', 'Active applications')} value={pipelineCounts.applied + pipelineCounts.interview} helper={t('pipeline_stat_active_helper', 'Applied + interview')} /><StatCard icon="I" label={t('pipeline_stat_interviews', 'Interviews')} value={pipelineCounts.interview} helper={t('pipeline_stat_interviews_helper', 'In interview stage')} /><StatCard icon="O" label={t('pipeline_stat_offers', 'Offers')} value={pipelineCounts.offer} helper={t('pipeline_stat_offers_helper', 'Offers received')} /></section>}
 
         <section className="historyMD-card historyMD-master">
           <div className="historyMD-masterHead"><div><p className="historyMD-kicker">Saved analyses</p><h2>{filtered.length} result{filtered.length === 1 ? '' : 's'}</h2></div><div className="historyMD-toolbar"><label className="historyMD-search"><span>⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search by job, company, location or status..." /></label><select value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recent">Newest</option><option value="score">Highest score</option><option value="company">Company A-Z</option></select></div></div>
@@ -293,10 +350,10 @@ export default function Dashboard({ onNewAnalysis, onSelectAnalysis, onBuildCv, 
           {!loading && fetchError && <EmptyState title={t('history_load_error', 'Could not load analyses')} text={t('history_load_error_desc', 'There was a problem fetching your data. Check your connection and try again.')} action={t('history_retry', 'Try again')} onAction={fetchAnalyses} />}
           {!loading && !fetchError && analyses.length === 0 && <EmptyState title={t('history_no_analyses', 'No analyses yet')} text={t('history_no_analyses_desc', 'Run your first job analysis and it will appear here.')} action={t('history_start_analyzing', 'Start analyzing')} onAction={onNewAnalysis} />}
           {!loading && analyses.length > 0 && filtered.length === 0 && <EmptyState title={t('history_no_filter_match', 'No matching analyses')} text={t('history_try_filter', 'Try another search or filter.')} />}
-          {!loading && filtered.length > 0 && <><div className="historyMD-tableWrap"><table className="historyMD-table"><thead><tr><th>Job title</th><th>Company</th><th>Fit score</th><th>Verdict</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>{visibleRows.map(item => { const tone = scoreTone(item.score); const active = selected?.id === item.id; return <tr key={item.id} className={active ? 'is-selected' : ''} onClick={() => setSelectedId(item.id)}><td><strong>{item.display.title}</strong><span>{item.display.location || item.display.workMode || item.display.contract || 'Saved analysis'}</span></td><td>{item.display.company || '—'}</td><td><b className={`historyMD-score historyMD-score--${tone}`}>{item.score}%</b>{item.scoreDelta !== null && item.scoreDelta !== 0 && <small style={{color:item.scoreDelta>0?'#10b981':'#ef4444',marginLeft:4,fontWeight:700}}>{item.scoreDelta>0?'+':''}{item.scoreDelta}</small>}</td><td><em className={`historyMD-verdict historyMD-verdict--${tone}`}>{verdictLabel(item.result?.overall_verdict || item.result?.recruiter_shortlist?.verdict, t)}</em></td><td><StatusPill analysis={item} onUpdate={updated => setAnalyses(prev => prev.map(row => row.id === updated.id ? updated : row))} compact /></td><td><span>{formatDate(item.created_at, lang)}</span><small>{formatTime(item.created_at, lang)}</small></td><td><button type="button" onClick={event => { event.stopPropagation(); onSelectAnalysis?.(item) }}>Open</button><button type="button" className="historyMD-deleteBtn" disabled={deleting === item.id} onClick={event => deleteAnalysis(item.id, event)}>×</button></td></tr> })}</tbody></table></div><div className="historyMD-pagination"><span>Showing {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}</span><div><button type="button" disabled={safePage <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>‹</button><strong>{safePage}</strong><button type="button" disabled={safePage >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>›</button></div></div></>}
+          {!loading && filtered.length > 0 && <><div className="historyMD-tableWrap"><table className="historyMD-table"><thead><tr><th>Job title</th><th>Company</th><th>Fit score</th><th>Verdict</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>{visibleRows.map(item => { const tone = scoreTone(item.score); const active = selected?.id === item.id; return <tr key={item.id} className={active ? 'is-selected' : ''} onClick={() => setSelectedId(item.id)}><td><strong>{item.display.title}</strong><span>{item.display.location || item.display.workMode || item.display.contract || 'Saved analysis'}</span>{getPipelineStatus(item) === 'applied' && daysSince(item.status_updated_at) >= 7 && <FollowUpNudge analysis={item} days={daysSince(item.status_updated_at)} onGenerateMessage={onGenerateMessage} t={t} small />}{getPipelineStatus(item) === 'interview' && <InterviewHint analysis={item} onSelectAnalysis={onSelectAnalysis} t={t} small />}</td><td>{item.display.company || '—'}</td><td><b className={`historyMD-score historyMD-score--${tone}`}>{item.score}%</b>{item.scoreDelta !== null && item.scoreDelta !== 0 && <small style={{color:item.scoreDelta>0?'#10b981':'#ef4444',marginLeft:4,fontWeight:700}}>{item.scoreDelta>0?'+':''}{item.scoreDelta}</small>}</td><td><em className={`historyMD-verdict historyMD-verdict--${tone}`}>{verdictLabel(item.result?.overall_verdict || item.result?.recruiter_shortlist?.verdict, t)}</em></td><td><StatusPill analysis={item} onUpdate={updated => setAnalyses(prev => prev.map(row => row.id === updated.id ? updated : row))} compact /></td><td><span>{formatDate(item.created_at, lang)}</span><small>{formatTime(item.created_at, lang)}</small></td><td><button type="button" onClick={event => { event.stopPropagation(); onSelectAnalysis?.(item) }}>Open</button><button type="button" className="historyMD-deleteBtn" disabled={deleting === item.id} onClick={event => deleteAnalysis(item.id, event)}>×</button></td></tr> })}</tbody></table></div><div className="historyMD-pagination"><span>Showing {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}</span><div><button type="button" disabled={safePage <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>‹</button><strong>{safePage}</strong><button type="button" disabled={safePage >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>›</button></div></div></>}
         </section>
 
-        {!loading && selected && <section className="historyMD-card historyMD-detail"><div className="historyMD-detailHeader"><div><p className="historyMD-kicker">Selected analysis</p><h2>{selectedDisplay.title}</h2><span>{selectedDisplay.company || 'Company not specified'} · {formatDate(selected.created_at, lang)} {formatTime(selected.created_at, lang)}</span></div><div className={`historyMD-detailScore historyMD-detailScore--${selectedTone}`}><strong>{selectedScore}%</strong><span>{verdictLabel(selectedResult.overall_verdict || selectedResult.recruiter_shortlist?.verdict, t)}</span></div></div><div className="historyMD-detailGrid"><article className="historyMD-detailSummary"><p>{selectedDisplay.summary || selectedResult.match_reasoning || 'No summary returned for this analysis.'}</p><div className="historyMD-miniFacts"><span><b>Work mode</b>{selectedDisplay.workMode || 'Not set'}</span><span><b>Contract</b>{selectedDisplay.contract || 'Not set'}</span><span><b>Salary</b>{selectedDisplay.salary || 'Not stated'}</span><span><b>Status</b>{getStatusLabel(getPipelineStatus(selected))}</span></div>{(selectedDisplay.recruiterReason || selectedDisplay.nextAction) && <div className="historyMD-recruiterBox"><strong>Recruiter screening summary</strong><p>{selectedDisplay.recruiterReason || selectedDisplay.nextReason || 'Review the missing proof points before applying.'}</p></div>}</article><div className="historyMD-keywordPanel"><strong>Missing keywords</strong><div>{missingKeywords.length ? missingKeywords.map(item => <span key={item}>{item}</span>) : <p>No missing keywords returned.</p>}</div><strong>Found in CV</strong><div>{foundKeywords.length ? foundKeywords.map(item => <span key={item} className="is-found">{item}</span>) : <p>No found keywords returned.</p>}</div></div></div><div className="historyMD-lists"><DetailList title="Quick wins" items={quickWins} empty="No quick wins returned." tone="good" /><DetailList title="Gaps to address" items={gaps} empty="No major gaps returned." tone="bad" /><DetailList title="Requirements met" items={met} empty="No met requirements returned." tone="good" /><DetailList title="Requirements missing" items={unmet} empty="No missing requirements returned." tone="bad" /></div><div className="historyMD-detailActions"><button type="button" className="historyMD-primary" onClick={() => onSelectAnalysis?.(selected)}>Open full analysis</button><button type="button" className="historyMD-ghost" onClick={onNewAnalysis}>Re-run analysis</button><button type="button" className="historyMD-ghost" onClick={() => onBuildCv?.(selected)} disabled={!onBuildCv}>Generate tailored CV</button><button type="button" className="historyMD-ghost" onClick={() => onGenerateMessage?.(selected)} disabled={!onGenerateMessage}>Generate message</button></div></section>}
+        {!loading && selected && <section className="historyMD-card historyMD-detail"><div className="historyMD-detailHeader"><div><p className="historyMD-kicker">Selected analysis</p><h2>{selectedDisplay.title}</h2><span>{selectedDisplay.company || 'Company not specified'} · {formatDate(selected.created_at, lang)} {formatTime(selected.created_at, lang)}</span></div><div className={`historyMD-detailScore historyMD-detailScore--${selectedTone}`}><strong>{selectedScore}%</strong><span>{verdictLabel(selectedResult.overall_verdict || selectedResult.recruiter_shortlist?.verdict, t)}</span></div></div><div className="historyMD-detailGrid"><article className="historyMD-detailSummary"><p>{selectedDisplay.summary || selectedResult.match_reasoning || 'No summary returned for this analysis.'}</p><div className="historyMD-miniFacts"><span><b>Work mode</b>{selectedDisplay.workMode || 'Not set'}</span><span><b>Contract</b>{selectedDisplay.contract || 'Not set'}</span><span><b>Salary</b>{selectedDisplay.salary || 'Not stated'}</span><span><b>Status</b>{getStatusLabel(getPipelineStatus(selected))}</span></div>{getPipelineStatus(selected) === 'applied' && daysSince(selected.status_updated_at) >= 7 && <FollowUpNudge analysis={selected} days={daysSince(selected.status_updated_at)} onGenerateMessage={onGenerateMessage} t={t} />}{getPipelineStatus(selected) === 'interview' && <InterviewHint analysis={selected} onSelectAnalysis={onSelectAnalysis} t={t} />}{(selectedDisplay.recruiterReason || selectedDisplay.nextAction) && <div className="historyMD-recruiterBox"><strong>Recruiter screening summary</strong><p>{selectedDisplay.recruiterReason || selectedDisplay.nextReason || 'Review the missing proof points before applying.'}</p></div>}</article><div className="historyMD-keywordPanel"><strong>Missing keywords</strong><div>{missingKeywords.length ? missingKeywords.map(item => <span key={item}>{item}</span>) : <p>No missing keywords returned.</p>}</div><strong>Found in CV</strong><div>{foundKeywords.length ? foundKeywords.map(item => <span key={item} className="is-found">{item}</span>) : <p>No found keywords returned.</p>}</div></div></div><div className="historyMD-lists"><DetailList title="Quick wins" items={quickWins} empty="No quick wins returned." tone="good" /><DetailList title="Gaps to address" items={gaps} empty="No major gaps returned." tone="bad" /><DetailList title="Requirements met" items={met} empty="No met requirements returned." tone="good" /><DetailList title="Requirements missing" items={unmet} empty="No missing requirements returned." tone="bad" /></div><div className="historyMD-detailActions"><button type="button" className="historyMD-primary" onClick={() => onSelectAnalysis?.(selected)}>Open full analysis</button><button type="button" className="historyMD-ghost" onClick={onNewAnalysis}>Re-run analysis</button><button type="button" className="historyMD-ghost" onClick={() => onBuildCv?.(selected)} disabled={!onBuildCv}>Generate tailored CV</button><button type="button" className="historyMD-ghost" onClick={() => onGenerateMessage?.(selected)} disabled={!onGenerateMessage}>Generate message</button></div></section>}
       </main>
       {deleteAllOpen && <DeleteAllModal count={analyses.length} onConfirm={handleDeleteAll} onClose={() => setDeleteAllOpen(false)} />}
     </div>
