@@ -11,8 +11,8 @@ export const config = { maxDuration: 60 }
 // Time budget so the function always returns before maxDuration (avoids 504s). The AI
 // step gets everything up to AI_BUDGET_MS from request start; each call is capped to the
 // remaining time, and we won't start an attempt with less than MIN_AI_ATTEMPT_MS left.
-const AI_BUDGET_MS = 48000
-const MAX_AI_CALL_MS = 40000
+const AI_BUDGET_MS = 54000
+const MAX_AI_CALL_MS = 44000
 const MIN_AI_ATTEMPT_MS = 9000
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
@@ -236,10 +236,11 @@ async function fetchNoSsrf(url, options = {}, timeoutMs = 9000, maxRedirects = 4
 function buildJinaTargets(url) {
   const clean = String(url || '').trim()
   const withoutScheme = clean.replace(/^https?:\/\//i, '')
+  // Two well-formed targets only. The old third target (`http://https://…`) was malformed
+  // and never succeeded — it just burned a full timeout and starved the AI step.
   return [...new Set([
     `https://r.jina.ai/${clean}`,
-    `https://r.jina.ai/http://${withoutScheme}`,
-    `https://r.jina.ai/http://https://${withoutScheme}`
+    `https://r.jina.ai/http://${withoutScheme}`
   ])]
 }
 
@@ -255,7 +256,7 @@ async function fetchViaJina(url) {
   const attempts = []
   for (const target of buildJinaTargets(url)) {
     try {
-      const res = await fetchWithTimeout(target, { headers, redirect: 'follow' }, 24000)
+      const res = await fetchWithTimeout(target, { headers, redirect: 'follow' }, 12000)
       if (!res.ok) {
         attempts.push({ target, status: res.status })
         continue
