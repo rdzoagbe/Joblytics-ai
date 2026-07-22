@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useLang } from '../context/LangContext'
 import { supabase } from '../lib/supabase'
 import { getDeviceId } from '../utils/deviceId'
 import './CareerIntelligencePage.css'
@@ -47,9 +48,9 @@ function scoreDelta(current, previous) {
   return `${delta}`
 }
 
-function list(items) {
+function list(items, t) {
   const safe = Array.isArray(items) ? items.filter(Boolean) : []
-  if (!safe.length) return <p className="careerIntel-muted">No specific item returned yet.</p>
+  if (!safe.length) return <p className="careerIntel-muted">{t ? t('ci_no_item', 'No specific item returned yet.') : 'No specific item returned yet.'}</p>
   return <ul>{safe.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
 }
 
@@ -82,9 +83,9 @@ function TextAreaField({ label, value, onChange, placeholder, rows = 8 }) {
   )
 }
 
-function TrendSparkline({ reports, type = 'career_score' }) {
+function TrendSparkline({ reports, type = 'career_score', t }) {
   const points = [...reports].reverse().map(item => toScore(type === 'shortlist_probability' ? item.shortlist_probability : item.career_score)).filter(score => score > 0).slice(-10)
-  if (points.length < 2) return <p className="careerIntel-muted">Generate at least two reports to see trend movement.</p>
+  if (points.length < 2) return <p className="careerIntel-muted">{t('ci_trend_need_two', 'Generate at least two reports to see trend movement.')}</p>
   const width = 240
   const height = 72
   const min = Math.min(...points)
@@ -107,38 +108,39 @@ function TrendSparkline({ reports, type = 'career_score' }) {
   )
 }
 
-function AnalyticsPanel({ analytics, reports }) {
+function AnalyticsPanel({ analytics, reports, t }) {
+  const pct = v => v ? `${v}%` : '—'
   return (
     <section className="careerIntel-analytics">
       <article className="careerIntel-card careerIntel-analyticsIntro">
-        <p className="careerIntel-kicker">Phase 2 Analytics</p>
-        <h2>Career progress dashboard</h2>
-        <p className="careerIntel-muted">Track how your positioning evolves across reports. The analytics improve automatically as more Career Intelligence reports are generated and saved.</p>
+        <p className="careerIntel-kicker">{t('ci_analytics_kicker', 'Phase 2 Analytics')}</p>
+        <h2>{t('ci_analytics_title', 'Career progress dashboard')}</h2>
+        <p className="careerIntel-muted">{t('ci_analytics_desc', 'Track how your positioning evolves across reports. The analytics improve automatically as more Career Intelligence reports are generated and saved.')}</p>
       </article>
 
       <div className="careerIntel-analyticsGrid">
-        <MetricCard label="Latest career score" value={analytics.latestCareer ? `${analytics.latestCareer}%` : '—'} helper={`Previous: ${analytics.previousCareer ? `${analytics.previousCareer}%` : '—'} · Δ ${analytics.careerDelta}`} tone="accent" />
-        <MetricCard label="Latest recruiter score" value={analytics.latestShortlist ? `${analytics.latestShortlist}%` : '—'} helper={`Previous: ${analytics.previousShortlist ? `${analytics.previousShortlist}%` : '—'} · Δ ${analytics.shortlistDelta}`} tone="warm" />
-        <MetricCard label="Best report" value={analytics.bestCareer ? `${analytics.bestCareer}%` : '—'} helper={analytics.bestRole || 'No report yet'} />
+        <MetricCard label={t('ci_latest_career', 'Latest career score')} value={pct(analytics.latestCareer)} helper={t('ci_previous_delta', { prev: pct(analytics.previousCareer), delta: analytics.careerDelta }, `Previous: ${pct(analytics.previousCareer)} · Δ ${analytics.careerDelta}`)} tone="accent" />
+        <MetricCard label={t('ci_latest_recruiter', 'Latest recruiter score')} value={pct(analytics.latestShortlist)} helper={t('ci_previous_delta', { prev: pct(analytics.previousShortlist), delta: analytics.shortlistDelta }, `Previous: ${pct(analytics.previousShortlist)} · Δ ${analytics.shortlistDelta}`)} tone="warm" />
+        <MetricCard label={t('ci_best_report', 'Best report')} value={pct(analytics.bestCareer)} helper={analytics.bestRole || t('ci_no_report_yet', 'No report yet')} />
       </div>
 
       <div className="careerIntel-reportGrid">
-        <ReportCard title="Career score trend" kicker="Progress">
-          <TrendSparkline reports={reports} type="career_score" />
-          <p className="careerIntel-muted">Average career score: {analytics.averageCareer ? `${analytics.averageCareer}%` : '—'}</p>
+        <ReportCard title={t('ci_career_trend', 'Career score trend')} kicker={t('ci_progress', 'Progress')}>
+          <TrendSparkline reports={reports} type="career_score" t={t} />
+          <p className="careerIntel-muted">{t('ci_avg_career', { v: pct(analytics.averageCareer) }, `Average career score: ${pct(analytics.averageCareer)}`)}</p>
         </ReportCard>
-        <ReportCard title="Recruiter score trend" kicker="Shortlist probability">
-          <TrendSparkline reports={reports} type="shortlist_probability" />
-          <p className="careerIntel-muted">Average recruiter score: {analytics.averageShortlist ? `${analytics.averageShortlist}%` : '—'}</p>
+        <ReportCard title={t('ci_recruiter_trend', 'Recruiter score trend')} kicker={t('ci_shortlist_prob', 'Shortlist probability')}>
+          <TrendSparkline reports={reports} type="shortlist_probability" t={t} />
+          <p className="careerIntel-muted">{t('ci_avg_recruiter', { v: pct(analytics.averageShortlist) }, `Average recruiter score: ${pct(analytics.averageShortlist)}`)}</p>
         </ReportCard>
-        <ReportCard title="Most targeted roles" kicker="Focus">
+        <ReportCard title={t('ci_targeted_roles', 'Most targeted roles')} kicker={t('ci_focus', 'Focus')}>
           {analytics.roles.length ? (
             <div className="careerIntel-roleChips">
               {analytics.roles.map(role => <span key={role.name}>{role.name}<strong>{role.count}</strong></span>)}
             </div>
-          ) : <p className="careerIntel-muted">Generate reports for different target roles to see your focus areas.</p>}
+          ) : <p className="careerIntel-muted">{t('ci_roles_hint', 'Generate reports for different target roles to see your focus areas.')}</p>}
         </ReportCard>
-        <ReportCard title="Improvement signal" kicker="Comparison">
+        <ReportCard title={t('ci_improvement', 'Improvement signal')} kicker={t('ci_comparison', 'Comparison')}>
           <p className="careerIntel-block">{analytics.insight}</p>
         </ReportCard>
       </div>
@@ -148,6 +150,7 @@ function AnalyticsPanel({ analytics, reports }) {
 
 export default function CareerIntelligencePage() {
   const { session } = useAuth()
+  const { t } = useLang()
   const [cvText, setCvText] = useState('')
   const [linkedinText, setLinkedinText] = useState('')
   const [jobDescription, setJobDescription] = useState('')
@@ -184,13 +187,15 @@ export default function CareerIntelligencePage() {
     const previousShortlist = previous ? toScore(previous.shortlist_probability) : 0
     const careerChange = latest && previous ? latestCareer - previousCareer : 0
     const shortlistChange = latest && previous ? latestShortlist - previousShortlist : 0
-    let insight = 'Generate at least two Career Intelligence reports to compare progress over time.'
+    const stateStable = t('ci_state_stable', 'stable')
+    const stateLower = n => t('ci_state_points_lower', { n }, `${n} points lower`)
+    let insight = t('ci_insight_default', 'Generate at least two Career Intelligence reports to compare progress over time.')
     if (latest && previous) {
-      if (careerChange > 0 && shortlistChange > 0) insight = `Strong improvement: your career score increased by ${careerChange} points and recruiter score increased by ${shortlistChange} points versus the previous report.`
-      else if (careerChange > 0) insight = `Career positioning improved by ${careerChange} points. Recruiter score is ${shortlistChange === 0 ? 'stable' : `${Math.abs(shortlistChange)} points lower`}, so keep strengthening evidence for the target role.`
-      else if (shortlistChange > 0) insight = `Recruiter score improved by ${shortlistChange} points. Career score is ${careerChange === 0 ? 'stable' : `${Math.abs(careerChange)} points lower`}, so validate whether the new target role is more demanding.`
-      else if (careerChange === 0 && shortlistChange === 0) insight = 'Scores are stable. The next improvement should come from adding measurable achievements, budget/vendor ownership, and stronger role-specific keywords.'
-      else insight = 'Latest scores are lower than the previous report. This may indicate a more ambitious target role or weaker evidence alignment. Review the gap analysis before applying.'
+      if (careerChange > 0 && shortlistChange > 0) insight = t('ci_insight_both', { c: careerChange, s: shortlistChange }, `Strong improvement: your career score increased by ${careerChange} points and recruiter score increased by ${shortlistChange} points versus the previous report.`)
+      else if (careerChange > 0) insight = t('ci_insight_career', { c: careerChange, state: shortlistChange === 0 ? stateStable : stateLower(Math.abs(shortlistChange)) }, `Career positioning improved by ${careerChange} points. Recruiter score is ${shortlistChange === 0 ? 'stable' : `${Math.abs(shortlistChange)} points lower`}, so keep strengthening evidence for the target role.`)
+      else if (shortlistChange > 0) insight = t('ci_insight_shortlist', { s: shortlistChange, state: careerChange === 0 ? stateStable : stateLower(Math.abs(careerChange)) }, `Recruiter score improved by ${shortlistChange} points. Career score is ${careerChange === 0 ? 'stable' : `${Math.abs(careerChange)} points lower`}, so validate whether the new target role is more demanding.`)
+      else if (careerChange === 0 && shortlistChange === 0) insight = t('ci_insight_stable', 'Scores are stable. The next improvement should come from adding measurable achievements, budget/vendor ownership, and stronger role-specific keywords.')
+      else insight = t('ci_insight_lower', 'Latest scores are lower than the previous report. This may indicate a more ambitious target role or weaker evidence alignment. Review the gap analysis before applying.')
     }
     return {
       latestCareer,
@@ -206,7 +211,7 @@ export default function CareerIntelligencePage() {
       roles,
       insight
     }
-  }, [reports])
+  }, [reports, t])
 
   useEffect(() => saveReports(reports), [reports])
 
@@ -287,7 +292,7 @@ export default function CareerIntelligencePage() {
     setUsage(null)
 
     if (combinedLength < 250) {
-      setError('Paste at least 250 characters from a CV, LinkedIn PDF, or professional profile before generating the report.')
+      setError(t('ci_err_min', 'Paste at least 250 characters from a CV, LinkedIn PDF, or professional profile before generating the report.'))
       return
     }
 
@@ -295,7 +300,7 @@ export default function CareerIntelligencePage() {
     try {
       const accessToken = await getFreshAccessToken(session)
       if (!accessToken) {
-        setError('Your session could not be verified. Please refresh the page or sign in again.')
+        setError(t('ci_err_session', 'Your session could not be verified. Please refresh the page or sign in again.'))
         return
       }
 
@@ -318,7 +323,7 @@ export default function CareerIntelligencePage() {
       setReport(data.report)
       await persistReport(data.report)
     } catch (e) {
-      setError(e.message || 'Career Intelligence report failed. Please try again.')
+      setError(e.message || t('ci_err_failed', 'Career Intelligence report failed. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -335,13 +340,13 @@ export default function CareerIntelligencePage() {
       <main className="careerIntel-shell">
         <section className="careerIntel-hero">
           <div>
-            <p className="careerIntel-kicker">Career Intelligence</p>
-            <h1>Know your market position before you apply.</h1>
-            <p>Turn your CV, LinkedIn PDF text, and target job into a recruiter-style career report: salary range, shortlist probability, missing evidence and next actions.</p>
+            <p className="careerIntel-kicker">{t('ci_kicker', 'Career Intelligence')}</p>
+            <h1>{t('ci_title', 'Know your market position before you apply.')}</h1>
+            <p>{t('ci_subtitle', 'Turn your CV, LinkedIn PDF text, and target job into a recruiter-style career report: salary range, shortlist probability, missing evidence and next actions.')}</p>
           </div>
           <div className="careerIntel-heroScore">
             <strong>{report ? `${report.career_score}%` : 'AI'}</strong>
-            <span>{report ? 'Career score' : 'Career report'}</span>
+            <span>{report ? t('ci_career_score', 'Career score') : t('ci_career_report', 'Career report')}</span>
           </div>
         </section>
 
@@ -349,104 +354,104 @@ export default function CareerIntelligencePage() {
           <article className="careerIntel-card careerIntel-formCard">
             <div className="careerIntel-formTop">
               <div>
-                <p className="careerIntel-kicker">Inputs</p>
-                <h2>Generate report</h2>
+                <p className="careerIntel-kicker">{t('ci_inputs', 'Inputs')}</p>
+                <h2>{t('ci_generate_report', 'Generate report')}</h2>
               </div>
-              <span>{combinedLength} chars</span>
+              <span>{t('ci_chars', { n: combinedLength }, `${combinedLength} chars`)}</span>
             </div>
 
             <div className="careerIntel-twoCols">
               <label className="careerIntel-field">
-                <span>Target role</span>
-                <input value={targetRole} onChange={e => setTargetRole(e.target.value)} placeholder="Head of IT, IT Operations Manager, Service Delivery Manager..." />
+                <span>{t('ci_target_role', 'Target role')}</span>
+                <input value={targetRole} onChange={e => setTargetRole(e.target.value)} placeholder={t('ci_target_role_ph', 'Head of IT, IT Operations Manager, Service Delivery Manager...')} />
               </label>
               <label className="careerIntel-field">
-                <span>Target market</span>
-                <input value={targetMarket} onChange={e => setTargetMarket(e.target.value)} placeholder="France, UK, Switzerland..." />
+                <span>{t('ci_target_market', 'Target market')}</span>
+                <input value={targetMarket} onChange={e => setTargetMarket(e.target.value)} placeholder={t('ci_target_market_ph', 'France, UK, Switzerland...')} />
               </label>
             </div>
 
-            <TextAreaField label="CV text" value={cvText} onChange={setCvText} placeholder="Paste your CV text here..." />
-            <TextAreaField label="LinkedIn/profile text optional" value={linkedinText} onChange={setLinkedinText} placeholder="Paste LinkedIn PDF text or professional profile content..." rows={6} />
-            <TextAreaField label="Job description optional" value={jobDescription} onChange={setJobDescription} placeholder="Paste a target job description for sharper gap analysis..." rows={6} />
+            <TextAreaField label={t('ci_cv_text', 'CV text')} value={cvText} onChange={setCvText} placeholder={t('ci_cv_text_ph', 'Paste your CV text here...')} />
+            <TextAreaField label={t('ci_linkedin_text', 'LinkedIn/profile text optional')} value={linkedinText} onChange={setLinkedinText} placeholder={t('ci_linkedin_text_ph', 'Paste LinkedIn PDF text or professional profile content...')} rows={6} />
+            <TextAreaField label={t('ci_job_desc', 'Job description optional')} value={jobDescription} onChange={setJobDescription} placeholder={t('ci_job_desc_ph', 'Paste a target job description for sharper gap analysis...')} rows={6} />
 
-            {usage && <p className="careerIntel-warning">{usage.planLabel}: {usage.used}/{usage.limit} Career Intelligence reports used this month.</p>}
+            {usage && <p className="careerIntel-warning">{t('ci_usage', { plan: usage.planLabel, used: usage.used, limit: usage.limit }, `${usage.planLabel}: ${usage.used}/${usage.limit} Career Intelligence reports used this month.`)}</p>}
             {error && <p className="careerIntel-warning">{error}</p>}
-            {checklist && <div className="careerIntel-checklist">{list(checklist)}</div>}
+            {checklist && <div className="careerIntel-checklist">{list(checklist, t)}</div>}
 
-            <button type="button" className="careerIntel-primary" disabled={!canRun} onClick={runReport}>{loading ? 'Generating report...' : 'Generate Career Intelligence'}</button>
+            <button type="button" className="careerIntel-primary" disabled={!canRun} onClick={runReport}>{loading ? t('ci_generating', 'Generating report...') : t('ci_generate_cta', 'Generate Career Intelligence')}</button>
           </article>
 
           <aside className="careerIntel-card careerIntel-history">
-            <p className="careerIntel-kicker">Saved reports</p>
-            <h2>Career history</h2>
-            <p className="careerIntel-muted">{historyLoading ? 'Loading cloud history...' : storageMode === 'cloud' ? 'Synced to your account.' : 'Saved locally on this device.'}</p>
+            <p className="careerIntel-kicker">{t('ci_saved_reports', 'Saved reports')}</p>
+            <h2>{t('ci_career_history', 'Career history')}</h2>
+            <p className="careerIntel-muted">{historyLoading ? t('ci_loading_cloud', 'Loading cloud history...') : storageMode === 'cloud' ? t('ci_synced', 'Synced to your account.') : t('ci_saved_local', 'Saved locally on this device.')}</p>
             {reports.length ? reports.map(entry => (
               <div key={entry.id} className="careerIntel-historyItem">
                 <button type="button" onClick={() => loadSaved(entry)}>
                   <strong>{entry.target_role}</strong>
-                  <span>{entry.career_score}% career · {entry.shortlist_probability}% shortlist</span>
+                  <span>{t('ci_item_scores', { c: entry.career_score, s: entry.shortlist_probability }, `${entry.career_score}% career · ${entry.shortlist_probability}% shortlist`)}</span>
                   <small>{new Date(entry.created_at).toLocaleDateString()} · {entry.source || storageMode}</small>
                 </button>
-                <button type="button" className="careerIntel-delete" onClick={() => deleteReport(entry)} aria-label="Delete report">×</button>
+                <button type="button" className="careerIntel-delete" onClick={() => deleteReport(entry)} aria-label={t('ci_delete_report', 'Delete report')}>×</button>
               </div>
-            )) : <p className="careerIntel-muted">Generated reports will appear here for quick review.</p>}
+            )) : <p className="careerIntel-muted">{t('ci_reports_empty', 'Generated reports will appear here for quick review.')}</p>}
           </aside>
         </section>
 
-        <AnalyticsPanel analytics={analytics} reports={reports} />
+        <AnalyticsPanel analytics={analytics} reports={reports} t={t} />
 
         {report && (
           <section className="careerIntel-results">
             <div className="careerIntel-metrics">
-              <MetricCard label="Career score" value={`${report.career_score}%`} helper={report.career_level || 'Current level'} tone="accent" />
-              <MetricCard label="Recruiter score" value={`${report.recruiter_view?.shortlist_probability || 0}%`} helper="Shortlist probability" tone="warm" />
-              <MetricCard label="Target market" value={report.target_market || 'Market'} helper={report.market_position || 'Market position'} />
+              <MetricCard label={t('ci_career_score', 'Career score')} value={`${report.career_score}%`} helper={report.career_level || t('ci_current_level', 'Current level')} tone="accent" />
+              <MetricCard label={t('ci_recruiter_score', 'Recruiter score')} value={`${report.recruiter_view?.shortlist_probability || 0}%`} helper={t('ci_shortlist_prob', 'Shortlist probability')} tone="warm" />
+              <MetricCard label={t('ci_target_market', 'Target market')} value={report.target_market || t('ci_market', 'Market')} helper={report.market_position || t('ci_market_position', 'Market position')} />
             </div>
 
-            <ReportCard title="Executive summary" kicker="Positioning">
+            <ReportCard title={t('ci_exec_summary', 'Executive summary')} kicker={t('ci_positioning', 'Positioning')}>
               <p className="careerIntel-block">{report.executive_summary}</p>
             </ReportCard>
 
             <div className="careerIntel-reportGrid">
-              <ReportCard title="Salary intelligence" kicker="Market value">
+              <ReportCard title={t('ci_salary', 'Salary intelligence')} kicker={t('ci_market_value', 'Market value')}>
                 <div className="careerIntel-salary"><strong>France</strong><span>{report.salary_intelligence?.france || '—'}</span></div>
                 <div className="careerIntel-salary"><strong>UK</strong><span>{report.salary_intelligence?.uk || '—'}</span></div>
                 <div className="careerIntel-salary"><strong>Switzerland</strong><span>{report.salary_intelligence?.switzerland || '—'}</span></div>
                 <p className="careerIntel-muted">{report.salary_intelligence?.note}</p>
               </ReportCard>
 
-              <ReportCard title="Recruiter view" kicker="Shortlist logic">
-                <h3>Why shortlisted</h3>{list(report.recruiter_view?.why_shortlisted)}
-                <h3>Risks</h3>{list(report.recruiter_view?.why_rejected)}
+              <ReportCard title={t('ci_recruiter_view', 'Recruiter view')} kicker={t('ci_shortlist_logic', 'Shortlist logic')}>
+                <h3>{t('ci_why_shortlisted', 'Why shortlisted')}</h3>{list(report.recruiter_view?.why_shortlisted, t)}
+                <h3>{t('ci_risks', 'Risks')}</h3>{list(report.recruiter_view?.why_rejected, t)}
               </ReportCard>
 
-              <ReportCard title="Gap analysis" kicker="What is missing">
-                <h3>Missing skills</h3>{list(report.gap_analysis?.missing_skills)}
-                <h3>Missing evidence</h3>{list(report.gap_analysis?.missing_evidence)}
-                <h3>Positioning gaps</h3>{list(report.gap_analysis?.positioning_gaps)}
+              <ReportCard title={t('ci_gap_analysis', 'Gap analysis')} kicker={t('ci_what_missing', 'What is missing')}>
+                <h3>{t('ci_missing_skills', 'Missing skills')}</h3>{list(report.gap_analysis?.missing_skills, t)}
+                <h3>{t('ci_missing_evidence', 'Missing evidence')}</h3>{list(report.gap_analysis?.missing_evidence, t)}
+                <h3>{t('ci_positioning_gaps', 'Positioning gaps')}</h3>{list(report.gap_analysis?.positioning_gaps, t)}
               </ReportCard>
 
-              <ReportCard title="Best-fit roles" kicker="Where to focus">
-                {list(report.recruiter_view?.best_fit_roles)}
+              <ReportCard title={t('ci_best_fit', 'Best-fit roles')} kicker={t('ci_where_focus', 'Where to focus')}>
+                {list(report.recruiter_view?.best_fit_roles, t)}
               </ReportCard>
 
-              <ReportCard title="Roadmap" kicker="Execution plan">
-                <h3>Next 30 days</h3>{list(report.roadmap?.next_30_days)}
-                <h3>Next 90 days</h3>{list(report.roadmap?.next_90_days)}
-                <h3>Next 12 months</h3>{list(report.roadmap?.next_12_months)}
+              <ReportCard title={t('ci_roadmap', 'Roadmap')} kicker={t('ci_exec_plan', 'Execution plan')}>
+                <h3>{t('ci_next_30', 'Next 30 days')}</h3>{list(report.roadmap?.next_30_days, t)}
+                <h3>{t('ci_next_90', 'Next 90 days')}</h3>{list(report.roadmap?.next_90_days, t)}
+                <h3>{t('ci_next_12', 'Next 12 months')}</h3>{list(report.roadmap?.next_12_months, t)}
               </ReportCard>
 
-              <ReportCard title="Application strategy" kicker="Apply smarter">
-                <h3>Apply now</h3>{list(report.application_strategy?.apply_now)}
-                <h3>Avoid for now</h3>{list(report.application_strategy?.avoid_for_now)}
+              <ReportCard title={t('ci_app_strategy', 'Application strategy')} kicker={t('ci_apply_smarter', 'Apply smarter')}>
+                <h3>{t('ci_apply_now', 'Apply now')}</h3>{list(report.application_strategy?.apply_now, t)}
+                <h3>{t('ci_avoid_now', 'Avoid for now')}</h3>{list(report.application_strategy?.avoid_for_now, t)}
                 <p className="careerIntel-block">{report.application_strategy?.message_angle}</p>
               </ReportCard>
             </div>
 
             {report.warnings?.length > 0 && (
-              <ReportCard title="Evidence warnings" kicker="Data quality">
-                {list(report.warnings)}
+              <ReportCard title={t('ci_evidence_warnings', 'Evidence warnings')} kicker={t('ci_data_quality', 'Data quality')}>
+                {list(report.warnings, t)}
               </ReportCard>
             )}
           </section>

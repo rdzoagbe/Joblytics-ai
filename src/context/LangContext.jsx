@@ -7,6 +7,7 @@ import { historyTranslations } from '../i18n/historyTranslations'
 import { postAnalysisTranslations } from '../i18n/postAnalysisTranslations'
 import { legalTranslations } from '../i18n/legalTranslations'
 import { productionTranslations } from '../i18n/productionTranslations'
+import { remainingPagesTranslations } from '../i18n/remainingPagesTranslations'
 
 const LangContext = createContext({})
 
@@ -53,7 +54,7 @@ function mergeTranslations(base, ...packs) {
   return merged
 }
 
-const allTranslations = mergeTranslations(translations, extraTranslations, billingTranslations, coachTranslations, historyTranslations, postAnalysisTranslations, legalTranslations, productionTranslations, cleanFallbacks)
+const allTranslations = mergeTranslations(translations, extraTranslations, billingTranslations, coachTranslations, historyTranslations, postAnalysisTranslations, legalTranslations, productionTranslations, remainingPagesTranslations, cleanFallbacks)
 
 function formatTemplate(value, params = {}) {
   if (typeof value !== 'string') return value

@@ -170,15 +170,15 @@ export default function ProfileOptimizerPage() {
           <article className="profileOpt-card">
             {savedProfiles.length > 0 && (
               <div className="profileOpt-savedSection">
-                <p className="profileOpt-kicker">Saved profiles</p>
+                <p className="profileOpt-kicker">{t('profile_saved_profiles', 'Saved profiles')}</p>
                 <div className="profileOpt-savedList">
                   {savedProfiles.map(p => (
                     <div key={p.id} className="profileOpt-savedItem">
                       <button type="button" className="profileOpt-savedLoad" onClick={() => loadSavedProfile(p)}>
                         <strong>{p.name}</strong>
-                        <span>{new Date(p.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · {p.text?.length || 0} chars</span>
+                        <span>{new Date(p.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · {p.text?.length || 0} {t('profile_chars_suffix', 'chars')}</span>
                       </button>
-                      <button type="button" className="profileOpt-savedDelete" onClick={() => deleteSavedProfile(p.id)} title="Remove">×</button>
+                      <button type="button" className="profileOpt-savedDelete" onClick={() => deleteSavedProfile(p.id)} title={t('profile_remove', 'Remove')}>×</button>
                     </div>
                   ))}
                 </div>
@@ -206,12 +206,12 @@ export default function ProfileOptimizerPage() {
             {hasEnoughProfileText && (
               <div className="profileOpt-saveRow">
                 {!showSaveForm ? (
-                  <button type="button" className="profileOpt-saveBtn" onClick={() => { setSaveProfileName(importInfo?.filename || ''); setShowSaveForm(true) }}>+ Save this profile</button>
+                  <button type="button" className="profileOpt-saveBtn" onClick={() => { setSaveProfileName(importInfo?.filename || ''); setShowSaveForm(true) }}>{t('profile_save_this', '+ Save this profile')}</button>
                 ) : (
                   <div className="profileOpt-saveForm">
-                    <input autoFocus value={saveProfileName} onChange={e => setSaveProfileName(e.target.value)} placeholder={importInfo?.filename || 'Profile name'} onKeyDown={e => { if (e.key === 'Enter') saveCurrentProfile(); if (e.key === 'Escape') setShowSaveForm(false) }} />
-                    <button type="button" className="profileOpt-saveDo" onClick={saveCurrentProfile}>Save</button>
-                    <button type="button" className="profileOpt-saveCancel" onClick={() => setShowSaveForm(false)}>Cancel</button>
+                    <input autoFocus value={saveProfileName} onChange={e => setSaveProfileName(e.target.value)} placeholder={importInfo?.filename || t('profile_name_placeholder', 'Profile name')} onKeyDown={e => { if (e.key === 'Enter') saveCurrentProfile(); if (e.key === 'Escape') setShowSaveForm(false) }} />
+                    <button type="button" className="profileOpt-saveDo" onClick={saveCurrentProfile}>{t('profile_save', 'Save')}</button>
+                    <button type="button" className="profileOpt-saveCancel" onClick={() => setShowSaveForm(false)}>{t('profile_cancel', 'Cancel')}</button>
                   </div>
                 )}
               </div>
@@ -230,7 +230,7 @@ export default function ProfileOptimizerPage() {
             <h2>{t('profile_sections')}</h2>
             <ul><li>{t('profile_role_positioning')}</li><li>{t('profile_headline')}</li><li>{t('profile_about')}</li><li>{t('profile_experience')}</li><li>{t('profile_keywords')}</li><li>{t('profile_evidence')}</li></ul>
             <p>{t('profile_help_desc_pdf_clean', 'The AI analyzes your PDF-imported or pasted text only. It does not invent experience or add skills you have not listed.')}</p>
-            <div className="profileOpt-futureNote"><strong>Export tip</strong><p>Get your LinkedIn PDF from LinkedIn → Me → View Profile → More → Save to PDF. It captures your full profile in one click.</p></div>
+            <div className="profileOpt-futureNote"><strong>{t('profile_export_tip', 'Export tip')}</strong><p>{t('profile_export_tip_body', 'Get your LinkedIn PDF from LinkedIn → Me → View Profile → More → Save to PDF. It captures your full profile in one click.')}</p></div>
           </aside>
         </section>
 
