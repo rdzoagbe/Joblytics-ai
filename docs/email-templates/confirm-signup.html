@@ -1,0 +1,61 @@
+<!--
+  Joblytics — Confirmation d'inscription / Confirm your signup
+  Coller dans : Supabase → Authentication → Emails → "Confirm signup" (onglet Source/HTML).
+  Objet suggéré : Confirmez votre compte Joblytics / Confirm your Joblytics account
+  Variable Supabase utilisée : {{ .ConfirmationURL }}
+  Bilingue : Français d'abord, English below (Supabase ne peut pas choisir la langue par utilisateur).
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FAF7F1;margin:0;padding:24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#FFFDF8;border:1px solid rgba(16,24,43,0.10);border-radius:16px;overflow:hidden;">
+        <!-- Header -->
+        <tr>
+          <td style="padding:28px 32px 8px 32px;">
+            <span style="font-size:22px;font-weight:800;color:#10182B;letter-spacing:-0.02em;">Job<span style="color:#B5663C;">lytics</span></span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:8px 32px 4px 32px;">
+            <h1 style="margin:12px 0 4px 0;font-size:20px;line-height:1.3;color:#10182B;font-weight:800;">Confirmez votre adresse email</h1>
+            <p style="margin:0 0 20px 0;font-size:15px;line-height:1.6;color:#5F6472;">
+              Bienvenue sur Joblytics ! Cliquez sur le bouton ci-dessous pour activer votre compte et commencer à analyser vos candidatures.
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px 0;">
+              <tr>
+                <td style="border-radius:12px;background-color:#B5663C;">
+                  <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:12px;">Confirmer mon compte →</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 24px 0;font-size:13px;line-height:1.6;color:#8A8F9C;">
+              Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+              <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#B5663C;word-break:break-all;">{{ .ConfirmationURL }}</a>
+            </p>
+          </td>
+        </tr>
+        <!-- Divider -->
+        <tr><td style="padding:0 32px;"><div style="border-top:1px solid rgba(16,24,43,0.08);"></div></td></tr>
+        <!-- English -->
+        <tr>
+          <td style="padding:20px 32px 4px 32px;">
+            <h2 style="margin:0 0 4px 0;font-size:16px;line-height:1.3;color:#10182B;font-weight:800;">Confirm your email address</h2>
+            <p style="margin:0 0 18px 0;font-size:14px;line-height:1.6;color:#5F6472;">
+              Welcome to Joblytics! Click the button above (or the link) to activate your account and start analyzing your job applications.
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:16px 32px 28px 32px;">
+            <p style="margin:0;font-size:12px;line-height:1.6;color:#A0A4AF;">
+              Vous n'avez pas créé de compte ? Ignorez cet email. / Didn't create an account? You can safely ignore this email.<br>
+              © Joblytics — <a href="https://joblytics-ai.com" style="color:#A0A4AF;">joblytics-ai.com</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
