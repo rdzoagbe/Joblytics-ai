@@ -85,7 +85,7 @@ function RecentAnalysis({ item, index, t, onClick }) {
           padding: '0 8px',
           borderRadius: 999,
           background: 'var(--accent-bg)',
-          border: '1px solid rgba(172,59,97,.18)',
+          border: '1px solid rgba(181,102,60,.18)',
           color: score ? scoreColor : 'var(--accent)',
           fontSize: 11,
           fontWeight: 950,

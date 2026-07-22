@@ -2,48 +2,50 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext({})
 
+// Premium palette: warm ivory + navy + copper (unified with the landing page and the
+// results screen so the whole product reads as one upscale system).
 const lightTokens = {
-  '--bg': '#EEE2DC',
-  '--bg-card': '#F8F0EC',
-  '--bg-input': 'rgba(255,255,255,0.68)',
-  '--border': 'rgba(18,60,105,0.14)',
-  '--border-focus': 'rgba(172,59,97,0.48)',
-  '--text-primary': '#123C69',
-  '--text-secondary': '#5C556A',
-  '--text-muted': '#8A8492',
-  '--text-hint': '#A09AA8',
-  '--shadow': 'rgba(18,60,105,0.08)',
-  '--accent': '#AC3B61',
-  '--accent-bg': 'rgba(172,59,97,0.10)',
-  '--accent-text': '#AC3B61',
-  '--slate': '#123C69',
-  '--slate-bg': 'rgba(18,60,105,0.10)',
-  '--red': '#A94740',
-  '--amber': '#8F641F',
-  '--green': '#3F6F50',
-  '--blue': '#123C69'
+  '--bg': '#FAF7F1',
+  '--bg-card': '#FFFDF8',
+  '--bg-input': 'rgba(255,255,255,0.72)',
+  '--border': 'rgba(16,24,43,0.12)',
+  '--border-focus': 'rgba(181,102,60,0.50)',
+  '--text-primary': '#10182B',
+  '--text-secondary': '#5F6472',
+  '--text-muted': '#8A8F9C',
+  '--text-hint': '#A6ABB6',
+  '--shadow': 'rgba(16,24,43,0.08)',
+  '--accent': '#B5663C',
+  '--accent-bg': 'rgba(181,102,60,0.10)',
+  '--accent-text': '#A85832',
+  '--slate': '#10182B',
+  '--slate-bg': 'rgba(16,24,43,0.08)',
+  '--red': '#B85C55',
+  '--amber': '#B9863B',
+  '--green': '#557C64',
+  '--blue': '#516483'
 }
 
 const darkTokens = {
-  '--bg': '#0A1D33',
-  '--bg-card': '#112441',
-  '--bg-input': 'rgba(238,226,220,0.08)',
-  '--border': 'rgba(238,226,220,0.16)',
-  '--border-focus': 'rgba(172,59,97,0.50)',
-  '--text-primary': '#EEE2DC',
-  '--text-secondary': 'rgba(238,226,220,0.76)',
-  '--text-muted': 'rgba(238,226,220,0.60)',
-  '--text-hint': 'rgba(238,226,220,0.50)',
-  '--shadow': 'rgba(0,0,0,0.40)',
-  '--accent': '#EDC7B7',
-  '--accent-bg': 'rgba(237,199,183,0.12)',
-  '--accent-text': '#EDC7B7',
-  '--slate': '#BAB2B5',
-  '--slate-bg': 'rgba(186,178,181,0.12)',
-  '--red': '#E09892',
+  '--bg': '#0E1420',
+  '--bg-card': '#161F2F',
+  '--bg-input': 'rgba(255,255,255,0.06)',
+  '--border': 'rgba(255,255,255,0.12)',
+  '--border-focus': 'rgba(212,146,94,0.55)',
+  '--text-primary': '#F4EFE7',
+  '--text-secondary': 'rgba(244,239,231,0.76)',
+  '--text-muted': 'rgba(244,239,231,0.58)',
+  '--text-hint': 'rgba(244,239,231,0.46)',
+  '--shadow': 'rgba(0,0,0,0.45)',
+  '--accent': '#D4925E',
+  '--accent-bg': 'rgba(212,146,94,0.14)',
+  '--accent-text': '#E0A876',
+  '--slate': '#C9D2E0',
+  '--slate-bg': 'rgba(201,210,224,0.10)',
+  '--red': '#E0938C',
   '--amber': '#E2B56F',
-  '--green': '#A6C0AE',
-  '--blue': '#BAB2B5'
+  '--green': '#8FB89C',
+  '--blue': '#9FB2CE'
 }
 
 export function ThemeProvider({ children }) {
