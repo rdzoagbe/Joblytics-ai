@@ -59,95 +59,118 @@ function toRuntimeEntry(stored) {
   }
 }
 
+// ---- Shared store -------------------------------------------------------------------------
+// A plain hook gives each component its OWN state, so a CV uploaded in <CvPanel> was invisible
+// to <AnalyzerPage> (both called useCvPersist independently) until a full reload — which left
+// the Analyze button disabled. Back the hook with a single module-level store so every
+// component sees the same CV list the moment it changes.
+let store = { cvList: [], activeCvId: null, loading: true, userId: undefined }
+const listeners = new Set()
+
+function setStore(patch) {
+  store = { ...store, ...patch }
+  listeners.forEach(fn => fn(store))
+}
+
+async function loadForUser(userId) {
+  if (!userId) { setStore({ cvList: [], activeCvId: null, loading: false, userId }); return }
+  setStore({ loading: true, userId })
+  try {
+    let list = await dbGet(`cv_list_${userId}`)
+    let activeId = await dbGet(`cv_active_${userId}`)
+    if (!list) {
+      const old = await dbGet(`cv_${userId}`) // migrate old single-CV format
+      if (old?.blob && old?.name) {
+        const id = makeId()
+        list = [{ id, name: old.name, type: old.type, size: old.size || 0, lastModified: old.lastModified || Date.now(), blob: old.blob }]
+        activeId = id
+        await dbSet(`cv_list_${userId}`, list)
+        await dbSet(`cv_active_${userId}`, activeId)
+      } else {
+        list = []
+      }
+    }
+    // Ignore a load that completed after the user changed.
+    if (store.userId !== userId) return
+    const withFiles = list.map(toRuntimeEntry)
+    setStore({ cvList: withFiles, activeCvId: activeId || withFiles[0]?.id || null, loading: false })
+  } catch (e) {
+    console.log('CV load error:', e.message)
+    if (store.userId === userId) setStore({ loading: false })
+  }
+}
+
+async function saveCvToStore(userId, file) {
+  const blob = new Blob([await file.arrayBuffer()], { type: file.type })
+  const existingEntry = store.cvList.find(c => c.name === file.name)
+  const id = existingEntry?.id || makeId()
+  const newEntry = { id, name: file.name, type: file.type, size: file.size, lastModified: file.lastModified || Date.now(), blob, file }
+  const updatedList = existingEntry
+    ? store.cvList.map(c => c.id === id ? newEntry : c)
+    : [...store.cvList, newEntry].slice(-MAX_CVS)
+  setStore({ cvList: updatedList, activeCvId: id })
+  if (!userId) return
+  try {
+    await dbSet(`cv_list_${userId}`, updatedList.map(toStorageEntry))
+    await dbSet(`cv_active_${userId}`, id)
+  } catch (e) {
+    console.log('CV save error:', e.message)
+  }
+}
+
+async function setActiveCvInStore(userId, id) {
+  setStore({ activeCvId: id })
+  if (!userId) return
+  try { await dbSet(`cv_active_${userId}`, id) } catch {}
+}
+
+async function deleteCvFromStore(userId, id) {
+  const updated = store.cvList.filter(c => c.id !== id)
+  const newActiveId = store.activeCvId === id ? (updated[0]?.id || null) : store.activeCvId
+  setStore({ cvList: updated, activeCvId: newActiveId })
+  if (!userId) return
+  try {
+    await dbSet(`cv_list_${userId}`, updated.map(toStorageEntry))
+    await dbSet(`cv_active_${userId}`, newActiveId)
+  } catch {}
+}
+
+async function clearCvInStore(userId) {
+  setStore({ cvList: [], activeCvId: null })
+  if (!userId) return
+  try {
+    await dbDel(`cv_list_${userId}`)
+    await dbDel(`cv_active_${userId}`)
+  } catch {}
+}
+
 export function useCvPersist() {
   const { user } = useAuth()
-  const [cvList, setCvList] = useState([])
-  const [activeCvId, setActiveCvIdState] = useState(null)
-  const [loading, setLoading] = useState(true)
   const userId = user?.id
+  const [snapshot, setSnapshot] = useState(store)
 
   useEffect(() => {
-    if (!userId) { setLoading(false); return }
-    ;(async () => {
-      try {
-        let list = await dbGet(`cv_list_${userId}`)
-        let activeId = await dbGet(`cv_active_${userId}`)
+    const listener = next => setSnapshot(next)
+    listeners.add(listener)
+    setSnapshot(store) // sync any change that happened between render and subscribe
+    return () => { listeners.delete(listener) }
+  }, [])
 
-        if (!list) {
-          // Migrate from old single-CV format
-          const old = await dbGet(`cv_${userId}`)
-          if (old?.blob && old?.name) {
-            const id = makeId()
-            list = [{ id, name: old.name, type: old.type, size: old.size || 0, lastModified: old.lastModified || Date.now(), blob: old.blob }]
-            activeId = id
-            await dbSet(`cv_list_${userId}`, list)
-            await dbSet(`cv_active_${userId}`, activeId)
-          } else {
-            list = []
-          }
-        }
-
-        const withFiles = list.map(toRuntimeEntry)
-        setCvList(withFiles)
-        setActiveCvIdState(activeId || withFiles[0]?.id || null)
-      } catch (e) {
-        console.log('CV load error:', e.message)
-      }
-      setLoading(false)
-    })()
+  // Load once per user; the shared store is reused by every hook instance.
+  useEffect(() => {
+    if (store.userId !== userId) loadForUser(userId)
   }, [userId])
 
-  const saveCv = async (file) => {
-    const blob = new Blob([await file.arrayBuffer()], { type: file.type })
-    const existingEntry = cvList.find(c => c.name === file.name)
-    const id = existingEntry?.id || makeId()
-    const newEntry = { id, name: file.name, type: file.type, size: file.size, lastModified: file.lastModified || Date.now(), blob, file }
+  const cvFile = snapshot.cvList.find(c => c.id === snapshot.activeCvId)?.file || null
 
-    const updatedList = existingEntry
-      ? cvList.map(c => c.id === id ? newEntry : c)
-      : [...cvList, newEntry].slice(-MAX_CVS)
-
-    setCvList(updatedList)
-    setActiveCvIdState(id)
-
-    if (!userId) return
-    try {
-      await dbSet(`cv_list_${userId}`, updatedList.map(toStorageEntry))
-      await dbSet(`cv_active_${userId}`, id)
-    } catch (e) {
-      console.log('CV save error:', e.message)
-    }
+  return {
+    cvFile,
+    cvList: snapshot.cvList,
+    activeCvId: snapshot.activeCvId,
+    loading: snapshot.loading,
+    saveCv: file => saveCvToStore(userId, file),
+    setActiveCv: id => setActiveCvInStore(userId, id),
+    deleteCv: id => deleteCvFromStore(userId, id),
+    clearCv: () => clearCvInStore(userId)
   }
-
-  const setActiveCv = async (id) => {
-    setActiveCvIdState(id)
-    if (!userId) return
-    try { await dbSet(`cv_active_${userId}`, id) } catch {}
-  }
-
-  const deleteCv = async (id) => {
-    const updated = cvList.filter(c => c.id !== id)
-    const newActiveId = activeCvId === id ? (updated[0]?.id || null) : activeCvId
-    setCvList(updated)
-    setActiveCvIdState(newActiveId)
-    if (!userId) return
-    try {
-      await dbSet(`cv_list_${userId}`, updated.map(toStorageEntry))
-      await dbSet(`cv_active_${userId}`, newActiveId)
-    } catch {}
-  }
-
-  const clearCv = async () => {
-    setCvList([])
-    setActiveCvIdState(null)
-    if (!userId) return
-    try {
-      await dbDel(`cv_list_${userId}`)
-      await dbDel(`cv_active_${userId}`)
-    } catch {}
-  }
-
-  const cvFile = cvList.find(c => c.id === activeCvId)?.file || null
-
-  return { cvFile, cvList, activeCvId, loading, saveCv, setActiveCv, deleteCv, clearCv }
 }
