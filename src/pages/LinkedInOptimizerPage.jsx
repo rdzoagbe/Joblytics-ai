@@ -139,13 +139,13 @@ export default function LinkedInOptimizerPage() {
     const dmaError = params.get('linkedin_dma_error')
 
     if (dmaConnected === 'connected') {
-      setDmaStatus('LinkedIn data authorization completed. Importing profile data...')
+      setDmaStatus(tr('linkedin_dma_auth_done', 'LinkedIn data authorization completed. Importing profile data...'))
       importLinkedInDmaData()
       window.history.replaceState({}, '', window.location.pathname)
     }
 
     if (dmaError) {
-      setError(`LinkedIn data import failed: ${dmaError}`)
+      setError(t('linkedin_dma_import_failed', { error: dmaError }, `LinkedIn data import failed: ${dmaError}`))
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
@@ -189,14 +189,14 @@ export default function LinkedInOptimizerPage() {
 
   function startLinkedInDmaImport() {
     setError('')
-    setDmaStatus('Redirecting to LinkedIn for full profile data consent...')
+    setDmaStatus(tr('linkedin_dma_redirect', 'Redirecting to LinkedIn for full profile data consent...'))
     window.location.assign('/api/linkedin-dma/start')
   }
 
   async function importLinkedInDmaData() {
     setError('')
     setDmaLoading(true)
-    setDmaStatus('Importing LinkedIn profile data...')
+    setDmaStatus(tr('linkedin_dma_importing', 'Importing LinkedIn profile data...'))
 
     try {
       const response = await fetch('/api/linkedin-dma/import')
@@ -209,9 +209,9 @@ export default function LinkedInOptimizerPage() {
       setProfileText((data.profileText || '').slice(0, 40000))
       setUploadName('LinkedIn Data Portability Import')
       setShowPaste(false)
-      setDmaStatus(`LinkedIn data imported: ${data.domains?.join(', ') || 'profile data'}. You can now optimize it.`)
+      setDmaStatus(t('linkedin_dma_imported', { domains: data.domains?.join(', ') || 'profile data' }, `LinkedIn data imported: ${data.domains?.join(', ') || 'profile data'}. You can now optimize it.`))
     } catch (err) {
-      setError(err.message || 'Could not import LinkedIn data.')
+      setError(err.message || tr('linkedin_dma_could_not_import', 'Could not import LinkedIn data.'))
       setDmaStatus('')
     } finally {
       setDmaLoading(false)
@@ -230,14 +230,14 @@ export default function LinkedInOptimizerPage() {
     try {
       if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
         const text = await readTextFile(file)
-        if (text.trim().length < 50) throw new Error('This text file does not contain enough profile content.')
+        if (text.trim().length < 50) throw new Error(tr('linkedin_txt_insufficient', 'This text file does not contain enough profile content.'))
         setProfileText(text.slice(0, 12000))
         setShowPaste(false)
         return
       }
 
       if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-        throw new Error('Please upload a LinkedIn PDF or a .txt file.')
+        throw new Error(tr('linkedin_pdf_or_txt', 'Please upload a LinkedIn PDF or a .txt file.'))
       }
 
       const base64 = await fileToBase64(file)
@@ -248,12 +248,12 @@ export default function LinkedInOptimizerPage() {
         body: JSON.stringify({ type: 'extract-pdf', fileBase64: base64, fileName: file.name })
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok || !data.success) throw new Error(data.error || 'Could not extract text from this PDF.')
+      if (!response.ok || !data.success) throw new Error(data.error || tr('linkedin_pdf_extract_failed', 'Could not extract text from this PDF.'))
 
       setProfileText(data.text)
       setShowPaste(false)
     } catch (err) {
-      setError(err.message || 'Could not process this file. Please use paste mode.')
+      setError(err.message || tr('linkedin_file_failed', 'Could not process this file. Please use paste mode.'))
       setProfileText('')
     } finally {
       setUploadLoading(false)
@@ -324,17 +324,17 @@ export default function LinkedInOptimizerPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
               {linkedinIdentity.picture ? <img src={linkedinIdentity.picture} alt="" style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} /> : <span style={linkedinBadgeStyle}>in</span>}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700, margin: 0 }}>LinkedIn connected{linkedinIdentity.name ? ` · ${linkedinIdentity.name}` : ''}</p>
-                <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Identity connected. Use the import button to request full LinkedIn profile data, or upload your PDF/paste sections.</p>
+                <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 700, margin: 0 }}>{tr('linkedin_connected', 'LinkedIn connected')}{linkedinIdentity.name ? ` · ${linkedinIdentity.name}` : ''}</p>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>{tr('linkedin_identity_desc', 'Identity connected. Use the import button to request full LinkedIn profile data, or upload your PDF/paste sections.')}</p>
                 {dmaStatus && <p style={{ fontSize: 11, color: 'var(--accent)', margin: '4px 0 0 0' }}>{dmaStatus}</p>}
               </div>
               <button type="button" onClick={startLinkedInDmaImport} disabled={dmaLoading} style={dmaButtonStyle}>
-                {dmaLoading ? 'Importing...' : 'Import full LinkedIn profile'}
+                {dmaLoading ? tr('linkedin_importing', 'Importing...') : tr('linkedin_import_full', 'Import full LinkedIn profile')}
               </button>
-              <button type="button" onClick={disconnectLinkedIn} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11 }}>Disconnect</button>
+              <button type="button" onClick={disconnectLinkedIn} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11 }}>{tr('linkedin_disconnect', 'Disconnect')}</button>
             </div>
           ) : (
-            <LinkedInOAuthButton style={{ maxWidth: 280 }}>Connect LinkedIn account</LinkedInOAuthButton>
+            <LinkedInOAuthButton style={{ maxWidth: 280 }}>{tr('linkedin_connect_account', 'Connect LinkedIn account')}</LinkedInOAuthButton>
           )}
         </div>
       </header>
@@ -363,14 +363,14 @@ export default function LinkedInOptimizerPage() {
           />
           <p style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 8, lineHeight: 1.5 }}>
             {uploadLoading
-              ? 'Extracting profile text...'
+              ? tr('linkedin_extracting', 'Extracting profile text...')
               : profileText
-                ? `✓ ${uploadName || 'Profile file'} loaded. ${profileText.length} characters extracted.`
-                : 'Export your LinkedIn profile as PDF, upload it here, then run the optimizer.'}
+                ? t('linkedin_loaded', { name: uploadName || tr('linkedin_profile_file', 'Profile file'), count: profileText.length }, `✓ ${uploadName || 'Profile file'} loaded. ${profileText.length} characters extracted.`)
+                : tr('linkedin_upload_hint', 'Export your LinkedIn profile as PDF, upload it here, then run the optimizer.')}
           </p>
           {profileText && (
             <button type="button" onClick={clearUploadedProfile} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 11, cursor: 'pointer', padding: 0, marginTop: 4 }}>
-              Clear uploaded profile
+              {tr('linkedin_clear_uploaded', 'Clear uploaded profile')}
             </button>
           )}
         </div>
@@ -518,8 +518,8 @@ export default function LinkedInOptimizerPage() {
               {tr('linkedin_download_desc', 'Download a plain-text report or the raw JSON response for debugging.')}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 8 }}>
-              <button type="button" onClick={downloadReport} className="btn-primary">⬇ Download .txt</button>
-              <button type="button" onClick={downloadJson} style={secondaryButtonStyle}>⬇ Download .json</button>
+              <button type="button" onClick={downloadReport} className="btn-primary">{tr('linkedin_download_txt', '⬇ Download .txt')}</button>
+              <button type="button" onClick={downloadJson} style={secondaryButtonStyle}>{tr('linkedin_download_json', '⬇ Download .json')}</button>
             </div>
           </div>
 

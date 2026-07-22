@@ -48,36 +48,43 @@ function decodeHtml(value = '') {
     .replace(/\u00a0/g, ' ')
 }
 
-function cleanLinkLabel(url = '', index = 0) {
+function cleanLinkLabel(url = '', index = 0, t) {
+  const tr = (key, params, fallback) => (t ? t(key, params, fallback) : fallback)
   try {
     const parsed = new URL(url)
     const host = parsed.hostname.replace(/^www\./, '')
     const jobId = parsed.pathname.match(/\/jobs\/view\/(\d+)/)?.[1]
     if (host.includes('linkedin.com')) {
-      if (jobId) return `View LinkedIn job ${jobId}`
-      return 'Open LinkedIn link'
+      if (jobId) return tr('msg_view_linkedin_job', { id: jobId }, `View LinkedIn job ${jobId}`)
+      return tr('msg_open_linkedin', {}, 'Open LinkedIn link')
     }
-    if (host.includes('smartrecruiters.com')) return 'Open application portal'
-    if (host.includes('greenhouse.io')) return 'Open Greenhouse application'
-    if (host.includes('lever.co')) return 'Open Lever application'
-    return `Open ${host}`
+    if (host.includes('smartrecruiters.com')) return tr('msg_open_portal', {}, 'Open application portal')
+    if (host.includes('greenhouse.io')) return tr('msg_open_greenhouse', {}, 'Open Greenhouse application')
+    if (host.includes('lever.co')) return tr('msg_open_lever', {}, 'Open Lever application')
+    return tr('msg_open_host', { host }, `Open ${host}`)
   } catch {
-    return `Open link ${index + 1}`
+    return tr('msg_open_link', { n: index + 1 }, `Open link ${index + 1}`)
   }
+}
+
+const SYNC_TYPE_KEYS = { Suggestion: 'msg_type_suggestion', Rejection: 'msg_type_rejection', Interview: 'msg_type_interview', 'Follow-up': 'msg_type_followup', Application: 'msg_type_application', Detected: 'msg_type_detected' }
+function typeLabel(type = '', t) {
+  const key = SYNC_TYPE_KEYS[type]
+  return key && t ? t(key, type) : type
 }
 
 function isSeparatorLine(line = '') {
   return /^[-–—_\s]{8,}$/.test(String(line || '').trim())
 }
 
-function renderLineWithLinks(line = '', keyPrefix = 'line') {
+function renderLineWithLinks(line = '', keyPrefix = 'line', t) {
   const decoded = decodeHtml(line)
   const parts = decoded.split(URL_RE)
   let linkIndex = 0
   return parts.map((part, index) => {
     if (!part) return null
     if (/^https?:\/\//i.test(part)) {
-      const label = cleanLinkLabel(part, linkIndex)
+      const label = cleanLinkLabel(part, linkIndex, t)
       linkIndex += 1
       return <a key={`${keyPrefix}-link-${index}`} className="mailReaderLink" href={part} target="_blank" rel="noopener noreferrer">{label}</a>
     }
@@ -85,18 +92,18 @@ function renderLineWithLinks(line = '', keyPrefix = 'line') {
   })
 }
 
-function EmailReader({ selected }) {
+function EmailReader({ selected, t }) {
   const body = decodeHtml(selected?.body || '')
   const lines = body ? body.split(/\r?\n/) : []
-  const sender = selected?.from || 'Unknown sender'
-  const subject = selected?.subject || selected?.title || 'Email content'
+  const sender = selected?.from || t('msg_unknown_sender', 'Unknown sender')
+  const subject = selected?.subject || selected?.title || t('msg_email_content', 'Email content')
   const aiSummary = selected?.ai_summary || ''
   const suggestedAction = selected?.suggested_action || ''
 
   return (
     <section className="gmailReader">
       <div className="gmailReaderToolbar">
-        <span>Email</span>
+        <span>{t('msg_email', 'Email')}</span>
         <em>{selected?.date || ''}</em>
       </div>
 
@@ -104,13 +111,13 @@ function EmailReader({ selected }) {
         <div className="gmailAvatar">{sender.slice(0, 1).toUpperCase()}</div>
         <div>
           <h3>{subject}</h3>
-          <p><strong>{sender}</strong> <span>to me</span></p>
+          <p><strong>{sender}</strong> <span>{t('msg_to_me', 'to me')}</span></p>
         </div>
       </div>
 
       {(aiSummary || suggestedAction) && (
         <div style={{ margin: '0 16px 12px', padding: '12px 14px', background: 'var(--bg-input)', borderRadius: 12, border: '1px solid var(--border)' }}>
-          <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 900, color: 'var(--accent)', letterSpacing: '.1em', textTransform: 'uppercase' }}>AI Summary</p>
+          <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 900, color: 'var(--accent)', letterSpacing: '.1em', textTransform: 'uppercase' }}>{t('msg_ai_summary', 'AI Summary')}</p>
           {aiSummary && <p style={{ margin: '0 0 5px', fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{aiSummary}</p>}
           {suggestedAction && <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>→ {suggestedAction}</p>}
         </div>
@@ -120,17 +127,17 @@ function EmailReader({ selected }) {
         {lines.length ? lines.map((line, index) => {
           if (isSeparatorLine(line)) return <hr key={`mail-hr-${index}`} />
           const empty = !line.trim()
-          return <p key={`mail-line-${index}`} className={empty ? 'is-spacer' : ''}>{empty ? ' ' : renderLineWithLinks(line, `mail-${index}`)}</p>
-        }) : <p>No email body was returned for this signal.</p>}
+          return <p key={`mail-line-${index}`} className={empty ? 'is-spacer' : ''}>{empty ? ' ' : renderLineWithLinks(line, `mail-${index}`, t)}</p>
+        }) : <p>{t('msg_no_body', 'No email body was returned for this signal.')}</p>}
       </div>
     </section>
   )
 }
 
-function CalendarInvite({ selected }) {
+function CalendarInvite({ selected, t }) {
   const body = decodeHtml(selected?.body || '')
   const lines = body.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-  const title = selected?.subject || selected?.title || lines[0] || 'Calendar invitation'
+  const title = selected?.subject || selected?.title || lines[0] || t('msg_calendar_invite', 'Calendar invitation')
   const location = selected?.platform && selected.platform !== 'Calendar' ? selected.platform : ''
   const attendees = selected?.from || ''
 
@@ -139,21 +146,21 @@ function CalendarInvite({ selected }) {
       <div className="calendarInviteHeader">
         <span>CAL</span>
         <div>
-          <p>Calendar invitation</p>
+          <p>{t('msg_calendar_invite', 'Calendar invitation')}</p>
           <h3>{title}</h3>
         </div>
       </div>
 
       <div className="calendarInviteFacts">
-        <div><span>When</span><strong>{selected?.date || 'Not specified'}</strong></div>
-        <div><span>Where</span><strong>{location || 'Not specified'}</strong></div>
-        <div><span>Attendees</span><strong>{attendees || 'Not specified'}</strong></div>
-        <div><span>Status</span><strong>{selected?.type || 'Detected'}</strong></div>
+        <div><span>{t('msg_when', 'When')}</span><strong>{selected?.date || t('msg_not_specified', 'Not specified')}</strong></div>
+        <div><span>{t('msg_where', 'Where')}</span><strong>{location || t('msg_not_specified', 'Not specified')}</strong></div>
+        <div><span>{t('msg_attendees', 'Attendees')}</span><strong>{attendees || t('msg_not_specified', 'Not specified')}</strong></div>
+        <div><span>{t('msg_status', 'Status')}</span><strong>{typeLabel(selected?.type, t) || t('msg_detected', 'Detected')}</strong></div>
       </div>
 
       <div className="calendarInviteBody">
-        {(lines.length ? lines : [body || 'No invitation description was returned.']).map((line, index) => (
-          <p key={`calendar-line-${index}`}>{renderLineWithLinks(line, `calendar-${index}`)}</p>
+        {(lines.length ? lines : [body || t('msg_no_invite_desc', 'No invitation description was returned.')]).map((line, index) => (
+          <p key={`calendar-line-${index}`}>{renderLineWithLinks(line, `calendar-${index}`, t)}</p>
         ))}
       </div>
     </section>
@@ -254,14 +261,14 @@ const PREVIEW_CALENDAR = [
   { id: 'preview-cal-1', title: 'TechCorp — Technical Interview', subject: 'Video call with engineering team', type: 'Interview', date: '', confidence: 'Preview example', body: '' }
 ]
 
-function SignalList({ items, selectedId, onSelect, tab, isPreviewMode }) {
+function SignalList({ items, selectedId, onSelect, tab, isPreviewMode, t }) {
   const displayItems = items.length ? items : (isPreviewMode ? (tab === 'calendar' ? PREVIEW_CALENDAR : PREVIEW_EMAILS) : [])
 
   if (!displayItems.length) {
     if (tab === 'calendar') {
-      return <div className="messagesStableEmpty"><strong>No interview events detected</strong><p>Interview meetings and recruitment events will appear here after Smart Sync scans your calendar.</p></div>
+      return <div className="messagesStableEmpty"><strong>{t('msg_no_interview_events', 'No interview events detected')}</strong><p>{t('msg_no_interview_events_desc', 'Interview meetings and recruitment events will appear here after Smart Sync scans your calendar.')}</p></div>
     }
-    return <div className="messagesStableEmpty"><strong>No detected signals yet</strong><p>Run Smart Sync to detect job-related emails and calendar events.</p></div>
+    return <div className="messagesStableEmpty"><strong>{t('msg_no_signals', 'No detected signals yet')}</strong><p>{t('msg_no_signals_desc', 'Run Smart Sync to detect job-related emails and calendar events.')}</p></div>
   }
 
   const isExample = isPreviewMode && !items.length
@@ -270,31 +277,31 @@ function SignalList({ items, selectedId, onSelect, tab, isPreviewMode }) {
     <div className="messagesStableSignals">
       {isExample && (
         <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-secondary)', background: 'var(--bg-input)', borderBottom: '1px solid var(--border)' }}>
-          Preview examples — connect to see real signals
+          {t('msg_preview_examples', 'Preview examples — connect to see real signals')}
         </div>
       )}
       {displayItems.map(item => (
         <button key={item.id} type="button" className={`messagesStableSignal ${selectedId === item.id ? 'is-selected' : ''} ${isExample ? 'is-preview' : ''}`} onClick={() => !isExample && onSelect(item)} style={isExample ? { opacity: 0.55, cursor: 'default', pointerEvents: 'none' } : {}}>
-          <span className={`statusPill ${signalTone(item.type)}`}>{item.type}</span>
+          <span className={`statusPill ${signalTone(item.type)}`}>{typeLabel(item.type, t)}</span>
           <strong>{item.title}</strong>
           <span className="messagesStableSignalSub">{item.subject}</span>
-          <em>{isExample ? 'Preview example' : (item.date || item.confidence)}</em>
+          <em>{isExample ? t('msg_preview_example', 'Preview example') : (item.date || item.confidence)}</em>
         </button>
       ))}
     </div>
   )
 }
 
-function SignalDetail({ selected, mode }) {
+function SignalDetail({ selected, mode, t }) {
   if (!selected) {
-    return <div className="messagesStableDetailEmpty"><strong>Select a signal</strong><p>Choose an item from the list to review the detected email or calendar event.</p></div>
+    return <div className="messagesStableDetailEmpty"><strong>{t('msg_select_signal', 'Select a signal')}</strong><p>{t('msg_select_signal_desc', 'Choose an item from the list to review the detected email or calendar event.')}</p></div>
   }
 
   const isCalendar = mode === 'calendar'
 
   return (
     <article className="messagesStableDetail messagesReaderDetail">
-      {isCalendar ? <CalendarInvite selected={selected} /> : <EmailReader selected={selected} />}
+      {isCalendar ? <CalendarInvite selected={selected} t={t} /> : <EmailReader selected={selected} t={t} />}
     </article>
   )
 }
@@ -354,7 +361,7 @@ export default function MessagesPage({ setPage }) {
       .order('last_message_at', { ascending: false })
       .limit(20)
       .then(({ data, error }) => {
-        if (error) setThreadError(error.message || 'Could not load support messages.')
+        if (error) setThreadError(error.message || t('msg_load_support_err', 'Could not load support messages.'))
         else setThreads(data || [])
       })
       .finally(() => setLoadingThreads(false))
@@ -378,11 +385,11 @@ export default function MessagesPage({ setPage }) {
     if (sync === 'connected') {
       const connectedProvider = params.get('provider') || provider
       setConnections(prev => new Set([...prev, connectedProvider]))
-      setSyncNotice('Account connected. Smart Sync will refresh automatically.')
+      setSyncNotice(t('msg_notice_connected', 'Account connected. Smart Sync will refresh automatically.'))
       autoRefreshAttempted.current = false
     }
-    if (sync === 'failed') setSyncNotice(params.get('reason') || 'Smart Sync connection failed.')
-    if (sync === 'cancelled') setSyncNotice('Smart Sync connection was cancelled.')
+    if (sync === 'failed') setSyncNotice(params.get('reason') || t('msg_notice_failed', 'Smart Sync connection failed.'))
+    if (sync === 'cancelled') setSyncNotice(t('msg_notice_cancelled', 'Smart Sync connection was cancelled.'))
     if (sync) window.history.replaceState({}, '', '/messages')
   }, [provider])
 
@@ -410,17 +417,17 @@ export default function MessagesPage({ setPage }) {
     setSyncSuccess('')
     try {
       const token = await getFreshAccessToken()
-      if (!token) throw new Error('Please sign in again.')
+      if (!token) throw new Error(t('msg_signin', 'Please sign in again.'))
       const res = await fetch('/api/mail-sync-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ provider, login_hint: accountEmail || undefined })
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.url) throw new Error(data?.error || `Could not start ${getProviderApiLabel(provider)} sync.`)
+      if (!res.ok || !data?.url) throw new Error(data?.error || t('msg_could_not_start', { provider: getProviderApiLabel(provider) }, `Could not start ${getProviderApiLabel(provider)} sync.`))
       window.location.href = data.url
     } catch (error) {
-      setSyncNotice(error.message || 'Could not connect your account.')
+      setSyncNotice(error.message || t('msg_could_not_connect', 'Could not connect your account.'))
     } finally {
       setSyncLoading(false)
     }
@@ -432,15 +439,15 @@ export default function MessagesPage({ setPage }) {
     if (!silent) setSyncSuccess('')
     try {
       const token = await getFreshAccessToken()
-      if (!token) throw new Error('Please sign in again.')
+      if (!token) throw new Error(t('msg_signin', 'Please sign in again.'))
       const res = await fetch('/api/smart-job-sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } })
       const data = await res.json().catch(() => ({}))
       if (data?.code === 'MAIL_CALENDAR_SYNC_NOT_CONNECTED' || data?.code === 'GOOGLE_SYNC_NOT_CONNECTED') {
-        setSyncNotice('Connect read-only access first, then run Smart Sync.')
+        setSyncNotice(t('msg_connect_first', 'Connect read-only access first, then run Smart Sync.'))
         setConnections(new Set())
         return
       }
-      if (!res.ok) throw new Error(data?.error || `Smart Sync failed (${res.status}).`)
+      if (!res.ok) throw new Error(data?.error || t('msg_sync_failed', { status: res.status }, `Smart Sync failed (${res.status}).`))
       const nextEmails = Array.isArray(data.emails) ? data.emails.map(normalizeEmail) : []
       const nextCalendar = Array.isArray(data.calendar) ? data.calendar.map(normalizeCalendar) : []
       const nextProviders = data.providers?.length ? data.providers : Array.from(connections)
@@ -459,9 +466,9 @@ export default function MessagesPage({ setPage }) {
         tab: nextTab,
         lastSyncAt: syncedAt
       })
-      setSyncSuccess(`Smart Sync complete: ${data.scanned || 0} signals scanned, ${data.eventsStored || 0} events saved, ${data.analysesUpdated || 0} jobs updated.`)
+      setSyncSuccess(t('msg_sync_complete', { scanned: data.scanned || 0, stored: data.eventsStored || 0, updated: data.analysesUpdated || 0 }, `Smart Sync complete: ${data.scanned || 0} signals scanned, ${data.eventsStored || 0} events saved, ${data.analysesUpdated || 0} jobs updated.`))
     } catch (error) {
-      setSyncNotice(error.message || 'Smart Sync could not complete.')
+      setSyncNotice(error.message || t('msg_sync_incomplete', 'Smart Sync could not complete.'))
     } finally {
       setSyncLoading(false)
     }
@@ -483,27 +490,27 @@ export default function MessagesPage({ setPage }) {
       <main className="messagesShell messagesStableShell">
         <section className="newSyncPanel messagesStableHero">
           <div className="newSyncHeader">
-            <p>SMART TRACKING</p>
-            <h2>Sync your mail and calendar</h2>
-            <span>Connect read-only access, then let Joblytics detect applications, replies, interviews, rejections and follow-ups from job-related emails and calendar events.</span>
+            <p>{t('msg_smart_tracking', 'SMART TRACKING')}</p>
+            <h2>{t('msg_sync_title', 'Sync your mail and calendar')}</h2>
+            <span>{t('msg_sync_desc', 'Connect read-only access, then let Joblytics detect applications, replies, interviews, rejections and follow-ups from job-related emails and calendar events.')}</span>
           </div>
 
           <div className="messagesStableConnect">
             <div>
-              <p>Connected account</p>
+              <p>{t('msg_connected_account', 'Connected account')}</p>
               <h3>{getProviderLabel(provider)}</h3>
-              <span>{accountEmail || 'No email detected'}</span>
+              <span>{accountEmail || t('msg_no_email', 'No email detected')}</span>
             </div>
             {!getSignedInProvider(user) && (
               <select value={provider} onChange={event => setProvider(event.target.value)}>
-                <option value="google">Gmail / Google Calendar</option>
-                <option value="microsoft">Outlook / Microsoft Calendar</option>
+                <option value="google">{t('msg_google_opt', 'Gmail / Google Calendar')}</option>
+                <option value="microsoft">{t('msg_ms_opt', 'Outlook / Microsoft Calendar')}</option>
               </select>
             )}
             <button type="button" className="newSyncRunBtn messagesStablePrimary" onClick={handlePrimarySync} disabled={syncLoading}>
-              {syncLoading ? 'Working…' : providerConnected ? 'Refresh Smart Sync now' : 'Connect & run Smart Sync'}
+              {syncLoading ? t('msg_working', 'Working…') : providerConnected ? t('msg_refresh', 'Refresh Smart Sync now') : t('msg_connect_run', 'Connect & run Smart Sync')}
             </button>
-            <em>{providerConnected ? 'Read-only access active' : 'Read-only access needed'} · Last sync: {lastSyncAt ? formatDate(lastSyncAt) : 'Never'}</em>
+            <em>{providerConnected ? t('msg_ro_active', 'Read-only access active') : t('msg_ro_needed', 'Read-only access needed')} · {t('msg_last_sync', 'Last sync')}: {lastSyncAt ? formatDate(lastSyncAt) : t('msg_never', 'Never')}</em>
           </div>
 
           {syncNotice && <p className="messagesNotice">ℹ {syncNotice}</p>}
@@ -515,19 +522,19 @@ export default function MessagesPage({ setPage }) {
             <div style={{ gridColumn: '1 / -1', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 16, padding: '18px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                 <div>
-                  <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase', background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', display: 'inline-block', marginBottom: 8 }}>Not connected yet</span>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Smart Sync reads your inbox for job signals</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>Once connected, Joblytics scans job-related emails and calendar events — detecting application confirmations, recruiter replies, interview invites, and rejections automatically.</p>
+                  <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase', background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: 6, padding: '2px 8px', display: 'inline-block', marginBottom: 8 }}>{t('msg_not_connected', 'Not connected yet')}</span>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>{t('msg_preview_title', 'Smart Sync reads your inbox for job signals')}</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>{t('msg_preview_desc', 'Once connected, Joblytics scans job-related emails and calendar events — detecting application confirmations, recruiter replies, interview invites, and rejections automatically.')}</p>
                 </div>
                 <button type="button" onClick={handlePrimarySync} disabled={syncLoading} style={{ fontSize: 12, fontWeight: 800, color: 'var(--bg)', background: 'var(--text-primary)', border: 'none', borderRadius: 999, padding: '9px 18px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {syncLoading ? 'Connecting…' : 'Connect & sync now'}
+                  {syncLoading ? t('msg_connecting', 'Connecting…') : t('msg_connect_sync', 'Connect & sync now')}
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {[
-                  { step: '1', label: 'Connect Gmail or Outlook', desc: 'Read-only access, revoke any time' },
-                  { step: '2', label: 'Run Smart Sync', desc: 'Scans last 90 days of job emails' },
-                  { step: '3', label: 'See your pipeline', desc: 'Interviews, rejections and follow-ups' }
+                  { step: '1', label: t('msg_step1_label', 'Connect Gmail or Outlook'), desc: t('msg_step1_desc', 'Read-only access, revoke any time') },
+                  { step: '2', label: t('msg_step2_label', 'Run Smart Sync'), desc: t('msg_step2_desc', 'Scans last 90 days of job emails') },
+                  { step: '3', label: t('msg_step3_label', 'See your pipeline'), desc: t('msg_step3_desc', 'Interviews, rejections and follow-ups') }
                 ].map(({ step, label, desc }) => (
                   <div key={step} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px' }}>
                     <span style={{ display: 'inline-grid', placeItems: 'center', width: 22, height: 22, borderRadius: 99, background: 'var(--text-primary)', color: 'var(--bg)', fontSize: 10, fontWeight: 950, marginBottom: 6 }}>{step}</span>
@@ -538,17 +545,17 @@ export default function MessagesPage({ setPage }) {
               </div>
             </div>
           )}
-          <Metric label="Tracked signals" value={stats.total} text="Email and calendar events" preview={isPreviewMode} />
-          <Metric label="Applications" value={stats.applications} text="Confirmed applications" preview={isPreviewMode} />
-          <Metric label="Interviews" value={stats.interviews} text="Detected interviews" preview={isPreviewMode} />
-          <Metric label="Rejections" value={stats.rejections} text="Negative replies" preview={isPreviewMode} />
-          <Metric label="Follow-ups" value={stats.followups} text="Potential actions" preview={isPreviewMode} />
+          <Metric label={t('msg_m_tracked', 'Tracked signals')} value={stats.total} text={t('msg_m_tracked_sub', 'Email and calendar events')} preview={isPreviewMode} />
+          <Metric label={t('msg_m_apps', 'Applications')} value={stats.applications} text={t('msg_m_apps_sub', 'Confirmed applications')} preview={isPreviewMode} />
+          <Metric label={t('msg_m_interviews', 'Interviews')} value={stats.interviews} text={t('msg_m_interviews_sub', 'Detected interviews')} preview={isPreviewMode} />
+          <Metric label={t('msg_m_rejections', 'Rejections')} value={stats.rejections} text={t('msg_m_rejections_sub', 'Negative replies')} preview={isPreviewMode} />
+          <Metric label={t('msg_m_followups', 'Follow-ups')} value={stats.followups} text={t('msg_m_followups_sub', 'Potential actions')} preview={isPreviewMode} />
         </section>
 
         <section className="messagesStableInbox">
           <div className="messagesStableTabs">
-            <button type="button" className={tab === 'emails' ? 'is-active' : ''} onClick={() => { setTab('emails'); setMobileView('list') }}>Emails <span>{emails.length}</span></button>
-            <button type="button" className={tab === 'calendar' ? 'is-active' : ''} onClick={() => { setTab('calendar'); setMobileView('list') }}>Calendar <span>{calendar.length}</span></button>
+            <button type="button" className={tab === 'emails' ? 'is-active' : ''} onClick={() => { setTab('emails'); setMobileView('list') }}>{t('msg_tab_emails', 'Emails')} <span>{emails.length}</span></button>
+            <button type="button" className={tab === 'calendar' ? 'is-active' : ''} onClick={() => { setTab('calendar'); setMobileView('list') }}>{t('msg_tab_calendar', 'Calendar')} <span>{calendar.length}</span></button>
           </div>
           <div className={`messagesStableSplit ${mobileView === 'detail' ? 'show-detail' : 'show-list'}`}>
             <SignalList
@@ -557,10 +564,11 @@ export default function MessagesPage({ setPage }) {
               onSelect={item => { setSelected(item); setMobileView('detail') }}
               tab={tab}
               isPreviewMode={isPreviewMode}
+              t={t}
             />
             <div>
-              <button type="button" className="msgMobileBack" onClick={() => setMobileView('list')}>← Back to {tab === 'calendar' ? 'Calendar' : 'Emails'}</button>
-              <SignalDetail selected={selected} mode={tab} />
+              <button type="button" className="msgMobileBack" onClick={() => setMobileView('list')}>{tab === 'calendar' ? t('msg_back_calendar', '← Back to Calendar') : t('msg_back_emails', '← Back to Emails')}</button>
+              <SignalDetail selected={selected} mode={tab} t={t} />
             </div>
           </div>
         </section>
@@ -576,21 +584,21 @@ export default function MessagesPage({ setPage }) {
           </div>
 
           {threadError && <p className="messagesError">⚠ {threadError}</p>}
-          {loadingThreads && <p className="messagesMuted">Loading support conversations…</p>}
+          {loadingThreads && <p className="messagesMuted">{t('msg_loading_support', 'Loading support conversations…')}</p>}
           {!loadingThreads && !threads.length && (
             <div className="messagesEmpty">
-              <strong>No support conversations yet</strong>
-              <p>When you submit a support request, it will appear here.</p>
-              <button type="button" onClick={() => setPage?.('contact')}>Contact support</button>
+              <strong>{t('msg_no_support', 'No support conversations yet')}</strong>
+              <p>{t('msg_no_support_desc', 'When you submit a support request, it will appear here.')}</p>
+              <button type="button" onClick={() => setPage?.('contact')}>{t('msg_contact_support', 'Contact support')}</button>
             </div>
           )}
           {!!threads.length && (
             <div className="messagesStableThreadList">
               {threads.map(thread => (
                 <article key={thread.id} className="messagesThread">
-                  <span>{thread.category || 'Support'}</span>
-                  <strong>{thread.subject || 'Support request'}</strong>
-                  <em>{thread.status || 'open'} · {formatDate(thread.last_message_at || thread.created_at)}</em>
+                  <span>{thread.category || t('msg_support', 'Support')}</span>
+                  <strong>{thread.subject || t('msg_support_request', 'Support request')}</strong>
+                  <em>{thread.status || t('msg_open', 'open')} · {formatDate(thread.last_message_at || thread.created_at)}</em>
                 </article>
               ))}
             </div>
