@@ -11,9 +11,9 @@
     "test": "node --test api/*.test.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.1",
-    "@sentry/react": "^10.57.0",
-    "@supabase/supabase-js": "^2.108.2",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@sentry/react": "^10.68.0",
+    "@supabase/supabase-js": "^2.110.8",
     "@vercel/analytics": "^2.0.1",
     "docx": "^9.7.1",
     "express": "^4.18.3",
