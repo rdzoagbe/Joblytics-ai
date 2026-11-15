@@ -80,7 +80,12 @@ Railway gives you a public URL like `fitscore-production.up.railway.app`
 
 ---
 
-## Legal
-- Uses only publicly available job offer text + your own CV
-- No data stored — analysis happens in real time
-- API key stored securely as Railway environment variable, never in code
+## Current deployment and data
+
+The production application uses **Vercel** (serverless API + Vite PWA) and **Supabase** (authentication, stored analysis history, application tracking, subscriptions and optional Smart Sync records). Anthropic powers AI explanations; Stripe is used for paid subscriptions. Sentry is integrated for error monitoring when configured.
+
+CV files saved through the master CV selector are stored in the browser's IndexedDB, scoped by user ID; they are not automatically synced between devices. Analysis content and Smart Sync signals **may be stored server-side**, as described in the Privacy Policy. The README's earlier "no data stored" wording was outdated.
+
+Secrets (including the Anthropic API key and Supabase service-role key) belong **only** in server-side Vercel environment variables, never in frontend `VITE_*` variables.
+
+See [the November 2026 stabilization release runbook](docs/STABILIZATION_2026_11.md) for migration order, billing/quotas, preview checks and Sentry verification. Existing Railway instructions above are legacy and should not be used for the current production deployment.
