@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
-import handler from '../api/stripe-webhook.js'
+import handler, { claimStripeEvent, completeStripeEvent, updateUserSubscription } from '../api/stripe-webhook.js'
 
 function request(payload, signature) {
   const req = Readable.from([Buffer.from(JSON.stringify(payload))])
@@ -68,4 +68,63 @@ test('Stripe rejects malformed signature header', async () => {
     if (old === undefined) delete process.env.STRIPE_WEBHOOK_SECRET
     else process.env.STRIPE_WEBHOOK_SECRET = old
   }
+})
+
+test('processed Stripe event is acknowledged without duplicate handling', async () => {
+  const sb = { rpc: async () => ({ data: { state: 'processed' }, error: null }) }
+  assert.deepEqual(await claimStripeEvent(sb, 'evt_processed'), { state: 'processed' })
+})
+
+test('in-progress Stripe event requests a retry', async () => {
+  const sb = { rpc: async () => ({ data: { state: 'busy' }, error: null }) }
+  await assert.rejects(claimStripeEvent(sb, 'evt_busy'), e =>
+    e.statusCode === 503 && e.code === 'STRIPE_EVENT_IN_PROGRESS')
+})
+
+test('recovered claim returns ownership token used for completion', async () => {
+  const calls = []
+  const sb = {
+    async rpc(method, params) {
+      calls.push({ method, params })
+      return method === 'claim_stripe_webhook_event'
+        ? { data: { state: 'claimed', token: 'test-token' }, error: null }
+        : { data: true, error: null }
+    }
+  }
+  const claimed = await claimStripeEvent(sb, 'evt_recovered')
+  assert.equal(claimed.token, 'test-token')
+  await completeStripeEvent(sb, 'evt_recovered', claimed.token, false)
+  assert.deepEqual(calls[1], {
+    method: 'complete_stripe_webhook_event',
+    params: { p_event_id: 'evt_recovered', p_claim_token: 'test-token', p_succeeded: false }
+  })
+})
+
+test('unresolved Stripe owner fails instead of acknowledging a lost subscription', async () => {
+  const sb = { auth: { admin: { getUserById: async () => ({ data: { user: null }, error: null }) } } }
+  await assert.rejects(updateUserSubscription({
+    supabase: sb,
+    userId: 'missing-user',
+    eventCreated: 1794750000,
+    subscription: { id: 'sub_test', status: 'active', items: { data: [{ price: { id: process.env.STRIPE_PLUS_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || 'price_1TM5bZ0E2aOc1laPuYuKWqZb' } }] } }
+  }), e => e.statusCode === 503 && e.code === 'STRIPE_USER_NOT_FOUND')
+})
+
+test('stale subscription events cannot update display metadata', async () => {
+  let metadataUpdated = false
+  const sb = {
+    auth: { admin: {
+      getUserById: async () => ({ data: { user: { user_metadata: {} } }, error: null }),
+      updateUserById: async () => { metadataUpdated = true; return { error: null } }
+    } },
+    rpc: async (method, params) => ({
+      data: { applied: false, reason: 'older_event' }, error: null
+    })
+  }
+  const result = await updateUserSubscription({
+    supabase: sb, userId: 'user-1', eventCreated: 1794750000,
+    subscription: { id: 'sub_test', status: 'active', items: { data: [{ price: { id: process.env.STRIPE_PLUS_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || 'price_1TM5bZ0E2aOc1laPuYuKWqZb' } }] } }
+  })
+  assert.equal(result.reason, 'older_event')
+  assert.equal(metadataUpdated, false)
 })
