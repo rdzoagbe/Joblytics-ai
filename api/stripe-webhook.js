@@ -134,6 +134,7 @@ export async function updateUserSubscription({ supabase, userId, subscription, e
       status: payload.subscription_status,
       stripe_customer_id: payload.stripe_customer_id,
       stripe_subscription_id: payload.stripe_subscription_id,
+      stripe_subscription_created: subscription.created,
       stripe_price_id: payload.stripe_price_id,
       stripe_product_id: payload.stripe_product_id,
       current_period_end: payload.current_period_end
