@@ -702,6 +702,14 @@ export default async function handler(req, res) {
     if (providerError) analysis.provider_error = providerError
 
     const savedRow = await saveAnalysis(supabase, authUser.id, cacheKey, analysis, jobUrl, cvFileName)
+    // Do not charge the monthly allowance for an analysis that cannot be persisted.
+    // The catch handler releases the reservation, and the UI can offer a retry.
+    if (!savedRow) {
+      const err = new Error('Your analysis could not be saved. Please retry; this attempt will not count toward your quota.')
+      err.statusCode = 503
+      err.code = 'ANALYSIS_SAVE_FAILED'
+      throw err
+    }
     if (quotaEventId) {
       await completeAtsQuota(supabase, quotaEventId, authUser.id, true)
       quotaEventId = null
