@@ -75,3 +75,22 @@ select tablename, policyname, cmd, roles
 from pg_policies where schemaname = 'public'
 and tablename in ('usage_events','subscriptions','stripe_webhook_events');
 ```
+
+## Validation environment blocker — 2026-11-15
+
+The Joblytics Supabase organization currently has two active free projects. Attempts to create an isolated **development branch** were rejected because branching requires the Pro plan. An isolated **free test project** was also rejected because the account is already at its two-project quota. **No branch or project was created, no production SQL was executed, and no existing project was paused/deleted.**
+
+The latest GitHub CI and Vercel preview builds passed, but **those checks do not validate PostgreSQL RPC behavior**. Consequently the two SQL migrations remain **NOT PRODUCTION APPROVED**.
+
+Safe paths forward:
+1. Run an isolated PostgreSQL + Supabase Auth/RLS test environment locally, or
+2. Provide a separate Supabase test environment with spare capacity, or
+3. If needed later, explicitly approve a paid Supabase plan or temporary paid project based on a fresh price quote.
+
+Never repurpose `RD-Clients` or run test reservations/webhooks against the production `Joblytics` database without specific authorization and a restore plan.
+
+Release acceptance criteria before merging:
+- SQL migrations apply cleanly on a full compatible schema; functions callable only by `service_role`.
+- Client cannot forge quota events; parallel reservations cannot exceed monthly cap; legacy usage correctly included; failures release reservations.
+- Stripe duplicates return acknowledged without reprocessing; stale claims can be reclaimed but not finalized by the previous worker; older events and superseded subscriptions cannot downgrade a newer entitlement; unresolved customers stay retryable.
+- Staged authenticated API and Stripe test-mode end-to-end checks pass. Smoke-test the analyzer with both language CV PDFs before production deployment.
