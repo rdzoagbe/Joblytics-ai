@@ -147,6 +147,53 @@ async function saveAnalysis(supabase, userId, cacheKey, analysis, jobUrl, cvFile
   }
 }
 
+
+function isQuotaExempt(userId) {
+  const ids = (process.env.ADMIN_USER_IDS || process.env.RATE_LIMIT_WHITELIST || '').split(',').map(s => s.trim()).filter(Boolean)
+  return ids.includes(userId)
+}
+
+async function reserveAtsQuota(supabase, userId) {
+  // Refuse chargeable AI work unless the atomic, service-role-only database quota is available.
+  // Deploy supabase/ats_usage_quotas.sql first.
+  if (!supabase) {
+    const error = new Error('Analysis billing checks are temporarily unavailable. Please try again later.')
+    error.statusCode = 503
+    error.code = 'QUOTA_SERVICE_UNAVAILABLE'
+    throw error
+  }
+  const { data, error } = await supabase.rpc('reserve_ats_analysis', { p_user_id: userId })
+  if (error || !data) {
+    console.error('[ATS_QUOTA] reservation failed:', error?.message || 'No response')
+    const err = new Error('Analysis quota checks are temporarily unavailable. Please try again later.')
+    err.statusCode = 503
+    err.code = 'QUOTA_SERVICE_UNAVAILABLE'
+    throw err
+  }
+  if (!data.allowed) {
+    const err = new Error(`Your ${data.plan || 'free'} monthly analysis limit has been reached. Upgrade your plan or try again next month.`)
+    err.statusCode = 429
+    err.code = 'PLAN_LIMIT_REACHED'
+    err.planLimit = data
+    throw err
+  }
+  return data
+}
+
+async function completeAtsQuota(supabase, eventId, userId, succeeded) {
+  if (!eventId) return
+  const { data, error } = await supabase.rpc('complete_ats_analysis', {
+    p_event_id: eventId, p_user_id: userId, p_succeeded: succeeded
+  })
+  if (error || data !== true) {
+    console.error('[ATS_QUOTA] completion failed:', error?.message || 'No reservation updated')
+    const err = new Error('Analysis usage could not be recorded. Please retry.')
+    err.statusCode = 503
+    err.code = 'QUOTA_COMPLETION_FAILED'
+    throw err
+  }
+}
+
 function extractJsonObject(raw = '') {
   const text = String(raw || '').trim().replace(/```json|```/g, '').trim()
   try { return JSON.parse(text) } catch {}
@@ -540,6 +587,9 @@ function publicError(error) {
 }
 
 export default async function handler(req, res) {
+  let quotaEventId = null
+  let quotaUserId = null
+  let quotaAdmin = null
   const requestStart = Date.now()
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -576,6 +626,11 @@ export default async function handler(req, res) {
     const cached = await readCachedAnalysis(supabase, authUser.id, cacheKey)
     if (cached) return res.status(200).json({ success: true, analysis: cached, cached: true, quality })
 
+    quotaAdmin = supabase
+    quotaUserId = authUser.id
+    const quota = isQuotaExempt(authUser.id) ? null : await reserveAtsQuota(supabase, authUser.id)
+    quotaEventId = quota?.event_id || null
+
     let aiResult = {}
     let providerError = null
     if (!skipAi) {
@@ -599,9 +654,17 @@ export default async function handler(req, res) {
     if (providerError) analysis.provider_error = providerError
 
     const savedRow = await saveAnalysis(supabase, authUser.id, cacheKey, analysis, jobUrl, cvFileName)
-    return res.status(200).json({ success: true, analysis, savedRow, cached: false, quality, providerError: debug ? providerError : undefined })
+    if (quotaEventId) {
+      await completeAtsQuota(supabase, quotaEventId, authUser.id, true)
+      quotaEventId = null
+    }
+    return res.status(200).json({ success: true, analysis, savedRow, cached: false, quality, planLimit: quota ? { plan: quota.plan, used: quota.used, limit: quota.limit, remaining: quota.remaining } : null, providerError: debug ? providerError : undefined })
   } catch (error) {
+    if (quotaEventId && quotaAdmin && quotaUserId) {
+      try { await completeAtsQuota(quotaAdmin, quotaEventId, quotaUserId, false) }
+      catch (completionError) { console.error('[ATS_QUOTA] failed to release reservation:', completionError.message) }
+    }
     const status = error?.statusCode || error?.status || 500
-    return res.status(status >= 400 && status < 600 ? status : 500).json({ success: false, error: publicError(error), code: error?.code || 'ANALYZE_ACCURATE_FAILED', extractionAttempts: error?.extractionAttempts })
+    return res.status(status >= 400 && status < 600 ? status : 500).json({ success: false, error: publicError(error), code: error?.code || 'ANALYZE_ACCURATE_FAILED', planLimit: error?.planLimit, extractionAttempts: error?.extractionAttempts })
   }
 }
