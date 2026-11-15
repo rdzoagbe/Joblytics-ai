@@ -21,6 +21,18 @@
   },
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/api/utility-dispatch?handler=health"
+    },
+    {
+      "source": "/api/contact",
+      "destination": "/api/utility-dispatch?handler=contact"
+    },
+    {
+      "source": "/api/support-reply",
+      "destination": "/api/utility-dispatch?handler=support-reply"
+    },
+    {
       "source": "/favicon.ico",
       "destination": "/icons/icon.svg"
     },
