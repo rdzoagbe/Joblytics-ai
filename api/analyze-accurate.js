@@ -148,12 +148,12 @@ async function saveAnalysis(supabase, userId, cacheKey, analysis, jobUrl, cvFile
 }
 
 
-function isQuotaExempt(userId) {
+export function isQuotaExempt(userId) {
   const ids = (process.env.ADMIN_USER_IDS || process.env.RATE_LIMIT_WHITELIST || '').split(',').map(s => s.trim()).filter(Boolean)
   return ids.includes(userId)
 }
 
-async function reserveAtsQuota(supabase, userId) {
+export async function reserveAtsQuota(supabase, userId) {
   // Refuse chargeable AI work unless the atomic, service-role-only database quota is available.
   // Deploy supabase/ats_usage_quotas.sql first.
   if (!supabase) {
@@ -180,7 +180,7 @@ async function reserveAtsQuota(supabase, userId) {
   return data
 }
 
-async function completeAtsQuota(supabase, eventId, userId, succeeded) {
+export async function completeAtsQuota(supabase, eventId, userId, succeeded) {
   if (!eventId) return
   const { data, error } = await supabase.rpc('complete_ats_analysis', {
     p_event_id: eventId, p_user_id: userId, p_succeeded: succeeded
