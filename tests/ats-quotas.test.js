@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { reserveAtsQuota, completeAtsQuota, isQuotaExempt } from './analyze-accurate.js'
+import { reserveAtsQuota, completeAtsQuota, isQuotaExempt } from '../api/analyze-accurate.js'
 
 function mockSupabase(result, error = null) {
   const calls = []

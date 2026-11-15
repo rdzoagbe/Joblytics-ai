@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
-import handler from './stripe-webhook.js'
+import handler from '../api/stripe-webhook.js'
 
 function request(payload, signature) {
   const req = Readable.from([Buffer.from(JSON.stringify(payload))])

@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'crypto'
 import dns from 'dns'
 import net from 'net'
-import { applyDeterministicAts, validateJobTextQuality } from './ats-deterministic.js'
-import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from './job-extractors.js'
+import { applyDeterministicAts, validateJobTextQuality } from '../server/shared/ats-deterministic.js'
+import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from '../server/shared/job-extractors.js'
 
 export const config = { maxDuration: 60 }
 

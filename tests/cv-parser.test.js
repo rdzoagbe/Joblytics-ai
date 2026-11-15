@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { extractCvText } from './analyze-accurate.js'
+import { extractCvText } from '../api/analyze-accurate.js'
 
 test('PDF upload rejects invalid magic bytes with a useful error', async () => {
   const bytes = Buffer.from('Not actually a pdf despite a .pdf extension').toString('base64')

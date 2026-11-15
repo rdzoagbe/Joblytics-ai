@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import handler from './utility-dispatch.js'
+import handler from '../api/utility-dispatch.js'
 
 test('unknown utility routes fail closed', async () => {
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } }

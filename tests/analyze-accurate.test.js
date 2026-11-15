@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { linkedInJobId, parseLinkedInGuestHtml } from './analyze-accurate.js'
+import { linkedInJobId, parseLinkedInGuestHtml } from '../api/analyze-accurate.js'
 
 test('linkedInJobId extracts the job id from common LinkedIn URL shapes', () => {
   assert.equal(linkedInJobId('https://www.linkedin.com/jobs/view/4418753634/'), '4418753634')

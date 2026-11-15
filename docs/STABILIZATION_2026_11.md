@@ -45,3 +45,7 @@ where nspname = 'public' and proname in ('reserve_ats_analysis','complete_ats_an
 - Current client IndexedDB CV persistence is not cross-device sync.
 - The Stripe event ledger is an idempotency guard, not a substitute for a reconciliation job. Add scheduled reconciliation and verify out-of-order subscription events before scaling paid billing.
 - Sentry is already initialized from `VITE_SENTRY_DSN`; verify it is set for production and that errors route to the correct organization. No Sentry organization configuration is changed by this PR.
+
+## Vercel Hobby function packaging
+
+Vercel's standalone API mode deploys each JavaScript module in `api/` as a function, including tests and internal helpers. This change moves the seven test modules into `tests/`, shared analyzers into `server/shared/`, and consolidates contact/reply/health endpoints behind a shared dispatcher with original URL rewrites. The resulting `api/` folder has **12 runtime function entries**, matching Vercel's documented Hobby limit. Do not move tests or helper modules back under `api/`.
