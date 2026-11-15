@@ -1,6 +1,8 @@
 -- Joblytics ATS monthly quotas: server-only, atomic reservations.
 -- Apply after review, BEFORE deploying the updated analyzer.
 -- Reservations avoid concurrent requests exceeding the monthly allocation.
+-- Legacy 'analysis' successes from the current UTC month count toward quota at rollout.
+-- The authenticated role is prevented from forging new 'ats_analysis' ledger rows.
 -- A crashed request's reservation expires after ten minutes.
 create or replace function public.reserve_ats_analysis(p_user_id uuid)
 returns jsonb
@@ -33,9 +35,12 @@ begin
   select count(*) into v_used
   from public.usage_events e
   where e.user_id = p_user_id
-    and e.action = 'ats_analysis'
     and e.created_at >= v_month_start
-    and (e.status = 'success' or (e.status = 'reserved' and e.created_at > now() - interval '10 minutes'));
+    and (
+      (e.action in ('ats_analysis', 'analysis') and e.status = 'success')
+      or (e.action = 'ats_analysis' and e.status = 'reserved'
+          and e.created_at > now() - interval '10 minutes')
+    );
 
   if v_used >= v_limit then
     return pg_catalog.jsonb_build_object('allowed', false, 'plan', v_plan, 'limit', v_limit, 'used', v_used, 'remaining', 0);
@@ -69,3 +74,16 @@ revoke all on function public.reserve_ats_analysis(uuid) from public, anon, auth
 revoke all on function public.complete_ats_analysis(uuid, uuid, boolean) from public, anon, authenticated;
 grant execute on function public.reserve_ats_analysis(uuid) to service_role;
 grant execute on function public.complete_ats_analysis(uuid, uuid, boolean) to service_role;
+
+-- Existing INSERT policy allows authenticated users to log ordinary actions.
+-- A RESTRICTIVE policy ensures they cannot forge chargeable ATS success events.
+-- Service-role RPC calls bypass RLS and can write reserved/success/failed statuses.
+drop policy if exists "Client cannot create ATS quota events" on public.usage_events;
+create policy "Client cannot create ATS quota events"
+  on public.usage_events as restrictive for insert to authenticated
+  with check (action <> 'ats_analysis');
+
+-- Count and reservations are indexed for the monthly quota query.
+create index if not exists usage_events_ats_quota_idx
+  on public.usage_events(user_id, created_at desc)
+  where action in ('ats_analysis', 'analysis');
