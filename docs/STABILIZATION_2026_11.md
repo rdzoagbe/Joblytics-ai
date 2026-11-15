@@ -94,3 +94,13 @@ Release acceptance criteria before merging:
 - Client cannot forge quota events; parallel reservations cannot exceed monthly cap; legacy usage correctly included; failures release reservations.
 - Stripe duplicates return acknowledged without reprocessing; stale claims can be reclaimed but not finalized by the previous worker; older events and superseded subscriptions cannot downgrade a newer entitlement; unresolved customers stay retryable.
 - Staged authenticated API and Stripe test-mode end-to-end checks pass. Smoke-test the analyzer with both language CV PDFs before production deployment.
+
+## PostgreSQL 17 integration test — validated without Supabase charges
+
+A dedicated GitHub Actions workflow (`.github/workflows/postgres-integration.yml`) starts a disposable PostgreSQL 17 service with a compatible synthetic subset of the Supabase schema. It applies both **exact PR migration files**, then executes `tests/sql/migration_integration.sql` to verify quota accounting, restricted role permissions, Stripe claim ownership/retry, stale events, and replacement subscription cancellation protection.
+
+**Validation 2026-11-15:** Both migration files applied successfully and the PostgreSQL integration assertions passed in GitHub Actions (run `43746727673`). Existing JavaScript CI also passed (run `43746727561`).
+
+This is meaningful SQL execution validation, but **not** a full Supabase Auth/API integration test or a Stripe live/test-mode webhooks integration test. Continue to require a controlled staging smoke test and a backup/rollback plan before production deployment.
+
+No live Supabase schema or data changes were made; no temporary Supabase branch or project exists; do not upgrade a paid plan solely for these repository SQL tests.
