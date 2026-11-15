@@ -496,24 +496,72 @@ async function fetchJobText(url) {
   throw err
 }
 
-async function extractCvText(base64Data, mimeType = '') {
-  const buffer = Buffer.from(base64Data, 'base64')
-  if (mimeType.includes('pdf')) {
-    try {
-      const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
-      const text = (await pdfParse(buffer)).text || ''
-      if (text.trim().length >= 50) return text
-    } catch {}
-    const err = new Error('Could not extract enough text from your PDF CV. If it is scanned, upload a text-based PDF or Word file.')
+export async function extractCvText(base64Data, mimeType = '', fileName = '') {
+  if (typeof base64Data !== 'string' || !base64Data.length) {
+    const err = new Error('Your CV file was empty. Select your PDF or Word file again.')
     err.statusCode = 400
-    err.code = 'CV_PARSE_FAILED'
+    err.code = 'CV_EMPTY_FILE'
     throw err
   }
-  if (mimeType.includes('word') || mimeType.includes('officedocument')) {
-    const mammoth = await import('mammoth')
-    return (await mammoth.extractRawText({ buffer })).value || ''
+  const buffer = Buffer.from(base64Data, 'base64')
+  const type = String(mimeType || '').toLowerCase()
+  const name = String(fileName || '').toLowerCase()
+  // Some browsers and PWA file pickers report an empty MIME type for valid PDFs.
+  const pdf = type.includes('pdf') || (type === '' && name.endsWith('.pdf'))
+  if (pdf) {
+    if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      const err = new Error('The selected file is not a valid PDF. Please export your CV to PDF or upload a Word file.')
+      err.statusCode = 400
+      err.code = 'CV_INVALID_PDF'
+      throw err
+    }
+
+    let parser
+    try {
+      const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
+      parser = pdfParse
+    } catch (error) {
+      console.error('[CV_PDF] PDF parser could not load:', error?.message)
+      const err = new Error('The server could not load its PDF reader. Please try a Word document.')
+      err.statusCode = 503
+      err.code = 'CV_PARSER_UNAVAILABLE'
+      throw err
+    }
+
+    let parseFailed = false
+    // The installed pdf-parse package bundles multiple PDF.js engines; retry with
+    // its alternate engines when one cannot decode a modern export.
+    for (const version of ['v1.10.100', 'v2.0.550']) {
+      try {
+        const result = await parser(buffer, { version, max: 25 })
+        const text = String(result?.text || '').trim()
+        if (text.length >= 50) return text
+      } catch (error) {
+        parseFailed = true
+        // No CV contents or filename in logs — only a non-sensitive parser diagnostic.
+        console.warn('[CV_PDF] PDF.js engine failed:', version, error?.name || 'Error')
+      }
+    }
+    const err = parseFailed
+      ? new Error('We could not read the text in this PDF. Try exporting it again as a standard PDF or upload a Word (.docx) CV.')
+      : new Error('This PDF has little or no selectable text. If it is a scanned image, export your CV as a text-based PDF or Word (.docx) file.')
+    err.statusCode = 400
+    err.code = parseFailed ? 'CV_PDF_DECODING_FAILED' : 'CV_PDF_NO_TEXT'
+    throw err
   }
-  const err = new Error('Unsupported file type. Please upload a PDF or Word document.')
+  if (type.includes('word') || type.includes('officedocument') || name.endsWith('.docx')) {
+    try {
+      const mammoth = await import('mammoth')
+      return (await mammoth.extractRawText({ buffer })).value || ''
+    } catch (error) {
+      console.warn('[CV_DOCX] failed to extract Word text:', error?.name || 'Error')
+      const err = new Error('We could not read the Word CV. Please upload a valid .docx file.')
+      err.statusCode = 400
+      err.code = 'CV_WORD_PARSE_FAILED'
+      throw err
+    }
+  }
+  const err = new Error('Unsupported CV format. Please upload a PDF or Word (.docx) document.')
   err.statusCode = 400
   err.code = 'UNSUPPORTED_FILE_TYPE'
   throw err
@@ -607,7 +655,7 @@ export default async function handler(req, res) {
     const supabase = getSupabaseAdmin()
     const [jobExtraction, cvText] = await Promise.all([
       providedJobText ? Promise.resolve({ text: cleanText(providedJobText, JOB_TEXT_LIMIT), provider: 'manual-paste' }) : fetchJobText(jobUrl),
-      extractCvText(cvBase64, cvMimeType)
+      extractCvText(cvBase64, cvMimeType, cvFileName)
     ])
     const jobText = jobExtraction.text
 
