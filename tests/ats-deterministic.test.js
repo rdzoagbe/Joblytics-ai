@@ -9,7 +9,7 @@ import {
   simulateImprovements,
   normalizeAnalysisShape,
   validateJobTextQuality
-} from './ats-deterministic.js'
+} from '../server/shared/ats-deterministic.js'
 
 const EN_DEVOPS_JOB = `We are looking for a Senior DevOps engineer with strong experience in AWS,
 Kubernetes, Docker, Terraform, CI/CD pipelines, Python and monitoring. You will manage cloud

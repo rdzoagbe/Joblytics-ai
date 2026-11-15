@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd, stripHtmlToText } from './job-extractors.js'
+import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd, stripHtmlToText } from '../server/shared/job-extractors.js'
 
 test('parseAtsTarget maps Greenhouse posting URLs to the boards API', () => {
   const t = parseAtsTarget('https://boards.greenhouse.io/acme/jobs/4012345?gh_src=abc')

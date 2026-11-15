@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'crypto'
 import dns from 'dns'
 import net from 'net'
-import { applyDeterministicAts, validateJobTextQuality } from './ats-deterministic.js'
-import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from './job-extractors.js'
+import { applyDeterministicAts, validateJobTextQuality } from '../server/shared/ats-deterministic.js'
+import { parseAtsTarget, atsJsonToText, extractJobPostingJsonLd } from '../server/shared/job-extractors.js'
 
 export const config = { maxDuration: 60 }
 
@@ -144,6 +144,53 @@ async function saveAnalysis(supabase, userId, cacheKey, analysis, jobUrl, cvFile
   } catch (error) {
     console.log('[ANALYZE_ACCURATE] save skipped:', error?.message || error)
     return null
+  }
+}
+
+
+export function isQuotaExempt(userId) {
+  const ids = (process.env.ADMIN_USER_IDS || process.env.RATE_LIMIT_WHITELIST || '').split(',').map(s => s.trim()).filter(Boolean)
+  return ids.includes(userId)
+}
+
+export async function reserveAtsQuota(supabase, userId) {
+  // Refuse chargeable AI work unless the atomic, service-role-only database quota is available.
+  // Deploy supabase/ats_usage_quotas.sql first.
+  if (!supabase) {
+    const error = new Error('Analysis billing checks are temporarily unavailable. Please try again later.')
+    error.statusCode = 503
+    error.code = 'QUOTA_SERVICE_UNAVAILABLE'
+    throw error
+  }
+  const { data, error } = await supabase.rpc('reserve_ats_analysis', { p_user_id: userId })
+  if (error || !data) {
+    console.error('[ATS_QUOTA] reservation failed:', error?.message || 'No response')
+    const err = new Error('Analysis quota checks are temporarily unavailable. Please try again later.')
+    err.statusCode = 503
+    err.code = 'QUOTA_SERVICE_UNAVAILABLE'
+    throw err
+  }
+  if (!data.allowed) {
+    const err = new Error(`Your ${data.plan || 'free'} monthly analysis limit has been reached. Upgrade your plan or try again next month.`)
+    err.statusCode = 429
+    err.code = 'PLAN_LIMIT_REACHED'
+    err.planLimit = data
+    throw err
+  }
+  return data
+}
+
+export async function completeAtsQuota(supabase, eventId, userId, succeeded) {
+  if (!eventId) return
+  const { data, error } = await supabase.rpc('complete_ats_analysis', {
+    p_event_id: eventId, p_user_id: userId, p_succeeded: succeeded
+  })
+  if (error || data !== true) {
+    console.error('[ATS_QUOTA] completion failed:', error?.message || 'No reservation updated')
+    const err = new Error('Analysis usage could not be recorded. Please retry.')
+    err.statusCode = 503
+    err.code = 'QUOTA_COMPLETION_FAILED'
+    throw err
   }
 }
 
@@ -449,24 +496,72 @@ async function fetchJobText(url) {
   throw err
 }
 
-async function extractCvText(base64Data, mimeType = '') {
-  const buffer = Buffer.from(base64Data, 'base64')
-  if (mimeType.includes('pdf')) {
-    try {
-      const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
-      const text = (await pdfParse(buffer)).text || ''
-      if (text.trim().length >= 50) return text
-    } catch {}
-    const err = new Error('Could not extract enough text from your PDF CV. If it is scanned, upload a text-based PDF or Word file.')
+export async function extractCvText(base64Data, mimeType = '', fileName = '') {
+  if (typeof base64Data !== 'string' || !base64Data.length) {
+    const err = new Error('Your CV file was empty. Select your PDF or Word file again.')
     err.statusCode = 400
-    err.code = 'CV_PARSE_FAILED'
+    err.code = 'CV_EMPTY_FILE'
     throw err
   }
-  if (mimeType.includes('word') || mimeType.includes('officedocument')) {
-    const mammoth = await import('mammoth')
-    return (await mammoth.extractRawText({ buffer })).value || ''
+  const buffer = Buffer.from(base64Data, 'base64')
+  const type = String(mimeType || '').toLowerCase()
+  const name = String(fileName || '').toLowerCase()
+  // Some browsers and PWA file pickers report an empty MIME type for valid PDFs.
+  const pdf = type.includes('pdf') || (type === '' && name.endsWith('.pdf'))
+  if (pdf) {
+    if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      const err = new Error('The selected file is not a valid PDF. Please export your CV to PDF or upload a Word file.')
+      err.statusCode = 400
+      err.code = 'CV_INVALID_PDF'
+      throw err
+    }
+
+    let parser
+    try {
+      const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
+      parser = pdfParse
+    } catch (error) {
+      console.error('[CV_PDF] PDF parser could not load:', error?.message)
+      const err = new Error('The server could not load its PDF reader. Please try a Word document.')
+      err.statusCode = 503
+      err.code = 'CV_PARSER_UNAVAILABLE'
+      throw err
+    }
+
+    let parseFailed = false
+    // The installed pdf-parse package bundles multiple PDF.js engines; retry with
+    // its alternate engines when one cannot decode a modern export.
+    for (const version of ['v1.10.100', 'v2.0.550']) {
+      try {
+        const result = await parser(buffer, { version, max: 25 })
+        const text = String(result?.text || '').trim()
+        if (text.length >= 50) return text
+      } catch (error) {
+        parseFailed = true
+        // No CV contents or filename in logs — only a non-sensitive parser diagnostic.
+        console.warn('[CV_PDF] PDF.js engine failed:', version, error?.name || 'Error')
+      }
+    }
+    const err = parseFailed
+      ? new Error('We could not read the text in this PDF. Try exporting it again as a standard PDF or upload a Word (.docx) CV.')
+      : new Error('This PDF has little or no selectable text. If it is a scanned image, export your CV as a text-based PDF or Word (.docx) file.')
+    err.statusCode = 400
+    err.code = parseFailed ? 'CV_PDF_DECODING_FAILED' : 'CV_PDF_NO_TEXT'
+    throw err
   }
-  const err = new Error('Unsupported file type. Please upload a PDF or Word document.')
+  if (type.includes('word') || type.includes('officedocument') || name.endsWith('.docx')) {
+    try {
+      const mammoth = await import('mammoth')
+      return (await mammoth.extractRawText({ buffer })).value || ''
+    } catch (error) {
+      console.warn('[CV_DOCX] failed to extract Word text:', error?.name || 'Error')
+      const err = new Error('We could not read the Word CV. Please upload a valid .docx file.')
+      err.statusCode = 400
+      err.code = 'CV_WORD_PARSE_FAILED'
+      throw err
+    }
+  }
+  const err = new Error('Unsupported CV format. Please upload a PDF or Word (.docx) document.')
   err.statusCode = 400
   err.code = 'UNSUPPORTED_FILE_TYPE'
   throw err
@@ -540,6 +635,9 @@ function publicError(error) {
 }
 
 export default async function handler(req, res) {
+  let quotaEventId = null
+  let quotaUserId = null
+  let quotaAdmin = null
   const requestStart = Date.now()
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -557,7 +655,7 @@ export default async function handler(req, res) {
     const supabase = getSupabaseAdmin()
     const [jobExtraction, cvText] = await Promise.all([
       providedJobText ? Promise.resolve({ text: cleanText(providedJobText, JOB_TEXT_LIMIT), provider: 'manual-paste' }) : fetchJobText(jobUrl),
-      extractCvText(cvBase64, cvMimeType)
+      extractCvText(cvBase64, cvMimeType, cvFileName)
     ])
     const jobText = jobExtraction.text
 
@@ -575,6 +673,11 @@ export default async function handler(req, res) {
 
     const cached = await readCachedAnalysis(supabase, authUser.id, cacheKey)
     if (cached) return res.status(200).json({ success: true, analysis: cached, cached: true, quality })
+
+    quotaAdmin = supabase
+    quotaUserId = authUser.id
+    const quota = isQuotaExempt(authUser.id) ? null : await reserveAtsQuota(supabase, authUser.id)
+    quotaEventId = quota?.event_id || null
 
     let aiResult = {}
     let providerError = null
@@ -599,9 +702,25 @@ export default async function handler(req, res) {
     if (providerError) analysis.provider_error = providerError
 
     const savedRow = await saveAnalysis(supabase, authUser.id, cacheKey, analysis, jobUrl, cvFileName)
-    return res.status(200).json({ success: true, analysis, savedRow, cached: false, quality, providerError: debug ? providerError : undefined })
+    // Do not charge the monthly allowance for an analysis that cannot be persisted.
+    // The catch handler releases the reservation, and the UI can offer a retry.
+    if (!savedRow) {
+      const err = new Error('Your analysis could not be saved. Please retry; this attempt will not count toward your quota.')
+      err.statusCode = 503
+      err.code = 'ANALYSIS_SAVE_FAILED'
+      throw err
+    }
+    if (quotaEventId) {
+      await completeAtsQuota(supabase, quotaEventId, authUser.id, true)
+      quotaEventId = null
+    }
+    return res.status(200).json({ success: true, analysis, savedRow, cached: false, quality, planLimit: quota ? { plan: quota.plan, used: quota.used, limit: quota.limit, remaining: quota.remaining } : null, providerError: debug ? providerError : undefined })
   } catch (error) {
+    if (quotaEventId && quotaAdmin && quotaUserId) {
+      try { await completeAtsQuota(quotaAdmin, quotaEventId, quotaUserId, false) }
+      catch (completionError) { console.error('[ATS_QUOTA] failed to release reservation:', completionError.message) }
+    }
     const status = error?.statusCode || error?.status || 500
-    return res.status(status >= 400 && status < 600 ? status : 500).json({ success: false, error: publicError(error), code: error?.code || 'ANALYZE_ACCURATE_FAILED', extractionAttempts: error?.extractionAttempts })
+    return res.status(status >= 400 && status < 600 ? status : 500).json({ success: false, error: publicError(error), code: error?.code || 'ANALYZE_ACCURATE_FAILED', planLimit: error?.planLimit, extractionAttempts: error?.extractionAttempts })
   }
 }

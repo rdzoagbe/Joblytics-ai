@@ -1,0 +1,41 @@
+name: PostgreSQL migration integration
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  migration-safety:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration_only
+          POSTGRES_DB: joblytics_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d joblytics_integration"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: integration_only
+      PGDATABASE: joblytics_integration
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client if missing
+        run: command -v psql || (sudo apt-get update -qq && sudo apt-get install -y postgresql-client)
+      - name: Create isolated Supabase-compatible fixtures
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/bootstrap.sql
+      - name: Apply ATS migration under test
+        run: psql -v ON_ERROR_STOP=1 -f supabase/ats_usage_quotas.sql
+      - name: Apply Stripe webhook migration under test
+        run: psql -v ON_ERROR_STOP=1 -f supabase/stripe_webhook_events.sql
+      - name: Assert authorization, billing, and replay behavior
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/migration_integration.sql
