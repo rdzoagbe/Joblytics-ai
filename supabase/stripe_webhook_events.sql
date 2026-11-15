@@ -102,7 +102,7 @@ begin
   if p_user_id is null or p_event_created is null or p_event_created <= 0
      or p_state is null or p_state->>'stripe_subscription_id' is null
      or p_state->>'plan' is null
-     or p_state->>'plan' not in ('starter', 'pro')
+     or p_state->>'plan' not in ('free', 'starter', 'pro')
      or p_state->>'status' is null
      or p_state->>'status' not in ('active','trialing','past_due','unpaid','canceled','incomplete','incomplete_expired','paused')
      or p_state->>'stripe_customer_id' is null
