@@ -52,6 +52,15 @@ function verifyStripeSignature(rawBody, signatureHeader) {
     throw err
   }
 
+  // Stripe recommends rejecting stale signed events to prevent replay attacks.
+  const signedAt = Number(timestamp)
+  if (!Number.isSafeInteger(signedAt) || Math.abs(Math.floor(Date.now() / 1000) - signedAt) > 300) {
+    const err = new Error('Stripe webhook timestamp is outside the five-minute tolerance.')
+    err.statusCode = 400
+    err.code = 'STRIPE_TIMESTAMP_EXPIRED'
+    throw err
+  }
+
   const payload = `${timestamp}.${rawBody.toString('utf8')}`
   const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex')
   const valid = signatures.some(sig => {
@@ -133,14 +142,48 @@ async function getSubscription(subscriptionId) {
   return data
 }
 
+
+async function claimStripeEvent(supabase, eventId) {
+  if (!supabase || !eventId) throw new Error('Stripe event ledger is unavailable.')
+  const { data, error } = await supabase.from('stripe_webhook_events')
+    .upsert({ event_id: eventId, status: 'processing' }, { onConflict: 'event_id', ignoreDuplicates: true })
+    .select('event_id')
+  if (error) throw error
+  if (data?.length) return 'claimed'
+
+  const { data: existing, error: readError } = await supabase.from('stripe_webhook_events')
+    .select('status, claimed_at').eq('event_id', eventId).single()
+  if (readError) throw readError
+  if (existing.status === 'processed') return 'processed'
+  // A simultaneous worker may still be processing; return 503 so Stripe retries.
+  const err = new Error('Webhook event is already being processed.')
+  err.statusCode = 503
+  err.code = 'STRIPE_EVENT_IN_PROGRESS'
+  throw err
+}
+
+async function markStripeEventProcessed(supabase, eventId) {
+  const { error } = await supabase.from('stripe_webhook_events').update({
+    status: 'processed', processed_at: new Date().toISOString()
+  }).eq('event_id', eventId).eq('status', 'processing')
+  if (error) throw error
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
+  let claimedEventId = null
+  let eventClient = null
   try {
     const rawBody = await readRawBody(req)
     verifyStripeSignature(rawBody, req.headers['stripe-signature'])
     const event = JSON.parse(rawBody.toString('utf8'))
     const supabase = createAdminSupabaseClient()
+    if (!supabase) throw new Error('Stripe webhook storage is not configured.')
+    const claim = await claimStripeEvent(supabase, event.id)
+    if (claim === 'processed') return res.status(200).json({ received: true, duplicate: true })
+    claimedEventId = event.id
+    eventClient = supabase
 
     let result = { ignored: true }
 
@@ -164,8 +207,16 @@ export default async function handler(req, res) {
       result = await updateUserSubscription({ supabase, userId, subscription, statusOverride: 'canceled' })
     }
 
+    await markStripeEventProcessed(supabase, event.id)
+    claimedEventId = null
     return res.status(200).json({ received: true, type: event.type, result })
   } catch (e) {
+    if (claimedEventId && eventClient) {
+      // Release failed claims, allowing Stripe's automatic retries to reprocess the event.
+      const { error: releaseError } = await eventClient.from('stripe_webhook_events')
+        .delete().eq('event_id', claimedEventId).eq('status', 'processing')
+      if (releaseError) console.error('Stripe webhook claim release failed:', releaseError.message)
+    }
     console.error('Stripe webhook error:', e)
     return res.status(e.statusCode || 500).json({ error: e.message || 'Webhook failed', code: e.code || 'STRIPE_WEBHOOK_FAILED' })
   }
