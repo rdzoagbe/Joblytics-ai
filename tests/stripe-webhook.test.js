@@ -128,3 +128,29 @@ test('stale subscription events cannot update display metadata', async () => {
   assert.equal(result.reason, 'older_event')
   assert.equal(metadataUpdated, false)
 })
+
+test('Stripe sync sends subscription ID and creation time to guarded DB write', async () => {
+  let rpcArgs = null
+  const sb = {
+    auth: { admin: {
+      getUserById: async () => ({ data: { user: { user_metadata: {} } }, error: null }),
+      updateUserById: async () => ({ error: null })
+    } },
+    rpc: async (method, args) => {
+      rpcArgs = { method, args }
+      return { data: { applied: true }, error: null }
+    }
+  }
+  const subscription = {
+    id: 'sub_newer', created: 1794800000, status: 'active', customer: 'cus_test',
+    items: { data: [{ price: { id: process.env.STRIPE_PLUS_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID || 'price_1TM5bZ0E2aOc1laPuYuKWqZb' } }] }
+  }
+  const result = await updateUserSubscription({
+    supabase: sb, userId: 'user-1', subscription, eventCreated: 1794800100
+  })
+  assert.equal(result.updated, true)
+  assert.equal(rpcArgs.method, 'apply_stripe_subscription_state')
+  assert.equal(rpcArgs.args.p_event_created, 1794800100)
+  assert.equal(rpcArgs.args.p_state.stripe_subscription_id, 'sub_newer')
+  assert.equal(rpcArgs.args.p_state.stripe_subscription_created, 1794800000)
+})
