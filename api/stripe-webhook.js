@@ -93,7 +93,8 @@ function planFromSubscription(subscription) {
 }
 
 function subscriptionPayload({ subscription }) {
-  const plan = planFromSubscription(subscription)
+  const mappedPlan = planFromSubscription(subscription)
+  const plan = subscription?.status === 'canceled' ? 'free' : mappedPlan
   return {
     subscription_plan: plan,
     plan,
